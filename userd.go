@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-// structure consistent with chef users
+// structure of user definition json files
 type User struct {
 	Username string   `json:"username"`
 	Groups   []string `json:"groups"`
@@ -45,14 +45,17 @@ func pull_or_clone(repo string, dest string) {
 	var cmd *exec.Cmd
 	if os.Chdir(path.Join(dest, dir)) == nil {
 		log.Println("Running git pull")
+		exec.Command("git", "reset", "--hard").Run()
 		cmd = exec.Command("git", "pull")
 	} else {
 		log.Println("Running git clone")
 		cmd = exec.Command("git", "clone", repo, path.Join(dest, dir))
 	}
-	if out, err := cmd.CombinedOutput(); err != nil {
-		log.Fatal("Error: ", string(out), err)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Fatal("Error: ", err)
 	}
+	log.Print("git: " + string(out))
 }
 
 // gather all the users together who are meant to be in this instance's realm
@@ -76,6 +79,14 @@ func gather_json_users(repo string, dest string) map[string]User {
 				} else if u.Username == "" {
 					log.Printf("%s: Error: Missing 'username' in JSON: %s", name, compact)
 				} else {
+					valid_groups := []string{}
+					for _, g := range u.Groups {
+						// only include groups that exist on this instances
+						if group_exists(g) {
+							valid_groups = append(valid_groups, g)
+						}
+					}
+					u.Groups = valid_groups
 					users[u.Username] = u
 					just_usernames = append(just_usernames, u.Username)
 				}
@@ -96,22 +107,13 @@ func user_exists(username string) bool {
 	}
 }
 
-func update_user(username string, attrs User) bool {
-	log.Printf("Updating user: %s", username)
+func update_users_groups(username string, attrs User) bool {
 	var cmd *exec.Cmd
-	var list []string
-	list = append(list, "usermod -G '' "+username)
-	for _, group := range attrs.Groups {
-		list = append(list, "adduser "+username+" "+group)
-	}
-	list = append(list, "adduser "+username+" userd")
-	for n, command := range list {
-		log.Printf("Updating user, running cmd %d: %s", n, command)
-		parts := strings.Fields(command)
-		tail := parts[1:len(parts)]
-		cmd = exec.Command(parts[0], tail...)
-		if _, err := cmd.CombinedOutput(); err != nil {
-			log.Printf("Error: Can't update user: %s: %s", username, err)
+	if len(attrs.Groups) > 0 {
+		log.Printf("Updating user groups: %s: %s", username, attrs.Groups)
+		cmd = exec.Command("usermod", "-G", strings.Join(attrs.Groups, ","), username)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			log.Printf("Error: Can't update user's groups: %s: %s %s", username, err, output)
 			return false
 		}
 	}
@@ -120,27 +122,11 @@ func update_user(username string, attrs User) bool {
 
 func create_user(username string, attrs User) bool {
 	log.Printf("Creating user: %s", username)
-	var list []string
-	list = append(list, "adduser --home /home/"+username+" --shell /bin/bash --disabled-password "+username)
-	for _, group := range attrs.Groups {
-		if group_exists(group) {
-			list = append(list, "adduser "+username+" "+group)
-		} else {
-			log.Printf("Error: Can't add user %s to group %s, group doesn't exist", username, group)
-		}
-	}
-	list = append(list, "adduser "+username+" userd")
-
 	var cmd *exec.Cmd
-	for n, command := range list {
-		log.Printf("Creating user, running cmd %d: %s", n, command)
-		parts := strings.Fields(command)
-		tail := parts[1:len(parts)]
-		cmd = exec.Command(parts[0], tail...)
-		if _, err := cmd.CombinedOutput(); err != nil {
-			log.Printf("Error: Can't create user: %s: %s", username, err)
-			return false
-		}
+	cmd = exec.Command("adduser", "--home", "/home/"+username, "--shell", "/bin/bash", "--disabled-password", username)
+	if _, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("Error: Can't create user: %s: %s", username, err)
+		return false
 	}
 	return true
 }
@@ -148,18 +134,10 @@ func create_user(username string, attrs User) bool {
 func delete_user(username string) bool {
 	log.Printf("Deleting user: %s", username)
 	var cmd *exec.Cmd
-	var list []string
-	list = append(list, "deluser --remove-home "+username)
-	list = append(list, "deluser "+username+" userd")
-	for n, command := range list {
-		log.Printf("Deleting user, running cmd %d: %s", n, command)
-		parts := strings.Fields(command)
-		tail := parts[1:len(parts)]
-		cmd = exec.Command(parts[0], tail...)
-		if _, err := cmd.CombinedOutput(); err != nil {
-			log.Printf("Error: Can't delete user: %s: %s", username, err)
-			return false
-		}
+	cmd = exec.Command("deluser", "--remove-home", username)
+	if _, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("Error: Can't delete user: %s: %s", username, err)
+		return false
 	}
 	return true
 }
@@ -174,27 +152,10 @@ func set_ssh_public_keys(username string, keys []string) bool {
 	if err := ioutil.WriteFile("/home/"+username+"/.ssh/authorized_keys", buffer.Bytes(), 0600); err != nil {
 		log.Printf("Error: Can't write ~/.ssh/authorized_keys file for user: %s: %s", username, err)
 	}
-	uid, gid := get_uid_gid(username)
-
-	// os.chown isn't working, not sure why, use native chown
+	// os.Chown isn't working, not sure why, use native chown instead
 	var cmd *exec.Cmd
-	cmd = exec.Command("chown", "-R", username+":"+username, "/home/"+username+"/.ssh")
-	cmd.combinedOutput()
+	cmd = exec.Command("chown", "-R", username+":"+username, "/home/"+username+"/.ssh").Run()
 	return true
-}
-
-func get_uid_gid(username string) (uid int, gid int) {
-	var cmd *exec.Cmd
-	cmd = exec.Command("getent", "passwd", username)
-	if output, err := cmd.CombinedOutput(); err == nil {
-		f := strings.Split(strings.TrimSpace(string(output[:])), ":")
-		uid, _ := strconv.Atoi(f[2])
-		gid, _ := strconv.Atoi(f[3])
-		log.Printf("UID/GID for %s: %d/%d", username, uid, gid)
-	} else {
-		log.Fatal(err)
-	}
-	return
 }
 
 func group_exists(group string) bool {
@@ -205,22 +166,6 @@ func group_exists(group string) bool {
 	} else {
 		return false
 	}
-}
-
-func get_group_members(group string) (users []string) {
-	var cmd *exec.Cmd
-	cmd = exec.Command("getent", "group", group)
-	if output, err := cmd.CombinedOutput(); err == nil {
-		// output looks like "cdrom:x:24:ubuntu,admin,user3"
-		s := strings.Split(strings.TrimSpace(string(output[:])), ":")[3]
-		if s != "" {
-			users = strings.Split(s, ",")
-		}
-	} else {
-		log.Print("Error: ", err)
-	}
-	log.Printf("Gathered %d users that are already in userd: %s", len(users), users)
-	return users
 }
 
 func get_ops() (string, string) {
@@ -236,23 +181,18 @@ func main() {
 	realm, repo := get_ops()
 	validate(realm, repo)
 	pull_or_clone(repo, "/tmp/")
-
 	users := gather_json_users(repo, "/tmp/")
 
 	for username, info := range users {
 		delete := true
 		for _, r := range info.Realms {
-			if r == realm {
+			if r == realm || strings.ToLower(r) == "all" {
 				delete = false
-				ok := false
-				if user_exists(username) {
-					ok = update_user(username, info)
-				} else {
-					ok = create_user(username, info)
+				if user_exists(username) == false {
+					create_user(username, info)
 				}
-				if ok {
-					set_ssh_public_keys(username, info.SSHKeys)
-				}
+				update_users_groups(username, info)
+				set_ssh_public_keys(username, info.SSHKeys)
 				break
 			}
 		}
@@ -260,6 +200,4 @@ func main() {
 			delete_user(username)
 		}
 	}
-
-	log.Print("Completed")
 }
