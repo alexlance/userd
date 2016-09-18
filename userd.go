@@ -170,21 +170,31 @@ func set_ssh_public_keys(username string, keys []string) bool {
 	log.Printf("Setting ssh keys for %s (...%s)", username, strings.TrimSpace(key_data[len(key_data)-50:]))
 	var buffer bytes.Buffer
 	buffer.WriteString(key_data)
-	os.Mkdir("/home/"+username+"/.ssh", 0500)
-	if err := ioutil.WriteFile("/home/"+username+"/.ssh/authorized_keys", buffer.Bytes(), 0400); err != nil {
-		log.Printf("Error: Can't write authorized_keys file for user: %s: %s", username, err)
+	os.Mkdir("/home/"+username+"/.ssh", 0700)
+	if err := ioutil.WriteFile("/home/"+username+"/.ssh/authorized_keys", buffer.Bytes(), 0600); err != nil {
+		log.Printf("Error: Can't write ~/.ssh/authorized_keys file for user: %s: %s", username, err)
 	}
+	uid, gid := get_uid_gid(username)
+
+	// os.chown isn't working, not sure why, use native chown
+	var cmd *exec.Cmd
+	cmd = exec.Command("chown", "-R", username+":"+username, "/home/"+username+"/.ssh")
+	cmd.combinedOutput()
 	return true
 }
 
-func make_group(group string) {
+func get_uid_gid(username string) (uid int, gid int) {
 	var cmd *exec.Cmd
-	cmd = exec.Command("groupadd", group)
-	if _, err := cmd.CombinedOutput(); err == nil {
-		log.Printf("Created group: %s", group)
+	cmd = exec.Command("getent", "passwd", username)
+	if output, err := cmd.CombinedOutput(); err == nil {
+		f := strings.Split(strings.TrimSpace(string(output[:])), ":")
+		uid, _ := strconv.Atoi(f[2])
+		gid, _ := strconv.Atoi(f[3])
+		log.Printf("UID/GID for %s: %d/%d", username, uid, gid)
 	} else {
-		log.Fatalf("Unable to create group: %s, (%s)", group, err)
+		log.Fatal(err)
 	}
+	return
 }
 
 func group_exists(group string) bool {
