@@ -13,8 +13,6 @@ import (
 	"strings"
 )
 
-// usage eg: userd --realm identity --repo git@github.com:lexerdev/lexer-users
-
 // structure consistent with chef users
 type User struct {
 	Username string   `json:"username"`
@@ -24,23 +22,20 @@ type User struct {
 }
 
 // initial checks, all systems go?
-func validate(realm string, repo string, userid int) {
+func validate(realm string, repo string) {
 	if realm == "" {
 		log.Fatal("Error: Empty argument --realm")
 	}
 	if repo == "" {
 		log.Fatal("Error: Empty argument --repo")
 	}
-	if os.Geteuid() != userid {
+	if os.Geteuid() != 0 {
 		log.Fatalf("Error: Bad user id (%d), must run as root", os.Geteuid())
 	}
 	for _, cmd := range []string{"adduser", "deluser", "usermod", "git", "id", "getent"} {
 		if _, err := exec.LookPath(cmd); err != nil {
 			log.Fatalf("Error: Command not found: %s", cmd)
 		}
-	}
-	if ok := group_exists("userd"); ok == false {
-		log.Fatal("Error: The group 'userd' doesn't exist")
 	}
 }
 
@@ -61,7 +56,7 @@ func pull_or_clone(repo string, dest string) {
 }
 
 // gather all the users together who are meant to be in this instance's realm
-func gather_json_users(repo string, dest string, realm string) map[string]User {
+func gather_json_users(repo string, dest string) map[string]User {
 	dir := path.Base(strings.Split(repo, " ")[0])
 	files, err := ioutil.ReadDir(path.Join(dest, dir))
 	if err != nil {
@@ -81,17 +76,13 @@ func gather_json_users(repo string, dest string, realm string) map[string]User {
 				} else if u.Username == "" {
 					log.Printf("%s: Error: Missing 'username' in JSON: %s", name, compact)
 				} else {
-					for _, r := range u.Realms {
-						if r == realm {
-							users[u.Username] = u
-							just_usernames = append(just_usernames, u.Username)
-						}
-					}
+					users[u.Username] = u
+					just_usernames = append(just_usernames, u.Username)
 				}
 			}
 		}
 	}
-	log.Printf("Gathered %d users for %s realm: %s", len(users), realm, just_usernames)
+	log.Printf("Gathered %d users: %s", len(users), just_usernames)
 	return users
 }
 
@@ -130,9 +121,13 @@ func update_user(username string, attrs User) bool {
 func create_user(username string, attrs User) bool {
 	log.Printf("Creating user: %s", username)
 	var list []string
-	list = append(list, "adduser --home /home/"+username+" --shell /bin/bash --disabled-password -m "+username)
+	list = append(list, "adduser --home /home/"+username+" --shell /bin/bash --disabled-password "+username)
 	for _, group := range attrs.Groups {
-		list = append(list, "adduser "+username+" "+group)
+		if group_exists(group) {
+			list = append(list, "adduser "+username+" "+group)
+		} else {
+			log.Printf("Error: Can't add user %s to group %s, group doesn't exist", username, group)
+		}
 	}
 	list = append(list, "adduser "+username+" userd")
 
@@ -182,6 +177,16 @@ func set_ssh_public_keys(username string, keys []string) bool {
 	return true
 }
 
+func make_group(group string) {
+	var cmd *exec.Cmd
+	cmd = exec.Command("groupadd", group)
+	if _, err := cmd.CombinedOutput(); err == nil {
+		log.Printf("Created group: %s", group)
+	} else {
+		log.Fatalf("Unable to create group: %s, (%s)", group, err)
+	}
+}
+
 func group_exists(group string) bool {
 	var cmd *exec.Cmd
 	cmd = exec.Command("getent", "group", group)
@@ -192,17 +197,20 @@ func group_exists(group string) bool {
 	}
 }
 
-func get_group_members(group string) []string {
+func get_group_members(group string) (users []string) {
 	var cmd *exec.Cmd
 	cmd = exec.Command("getent", "group", group)
 	if output, err := cmd.CombinedOutput(); err == nil {
-		l := strings.Split(strings.TrimSpace(string(output[:])), ":")
-		u := strings.Split(strings.Join(l[len(l)-1:], ""), ",")
-		log.Printf("Gathered %d users that are already in userd: %s", len(u), u)
-		return u
+		// output looks like "cdrom:x:24:ubuntu,admin,user3"
+		s := strings.Split(strings.TrimSpace(string(output[:])), ":")[3]
+		if s != "" {
+			users = strings.Split(s, ",")
+		}
 	} else {
-		return make([]string, 0)
+		log.Print("Error: ", err)
 	}
+	log.Printf("Gathered %d users that are already in userd: %s", len(users), users)
+	return users
 }
 
 func get_ops() (string, string) {
@@ -216,40 +224,30 @@ func main() {
 	log.SetPrefix("userd ")
 
 	realm, repo := get_ops()
-	validate(realm, repo, 0)
+	validate(realm, repo)
 	pull_or_clone(repo, "/tmp/")
 
-	users := gather_json_users(repo, "/tmp/", realm)
-	entries_userd := get_group_members("userd")
+	users := gather_json_users(repo, "/tmp/")
 
-	// for all users in the userd group
-	for _, username := range entries_userd {
-		if user_exists(username) {
-			// if they're no longer in repo/json, delete them
-			info, ok := users[username]
-			if ok == false {
-				delete_user(username)
-			} else {
-				if ok := update_user(username, info); ok == true {
+	for username, info := range users {
+		delete := true
+		for _, r := range info.Realms {
+			if r == realm {
+				delete = false
+				ok := false
+				if user_exists(username) {
+					ok = update_user(username, info)
+				} else {
+					ok = create_user(username, info)
+				}
+				if ok {
 					set_ssh_public_keys(username, info.SSHKeys)
 				}
+				break
 			}
 		}
-	}
-
-	// for all users in the json
-	for username, info := range users {
-		create := true
-		for _, un := range entries_userd {
-			if username == un {
-				create = false
-			}
-		}
-		// if that user isn't in the userd group, add that user
-		if create == true && !user_exists(username) {
-			if ok := create_user(username, info); ok == true {
-				set_ssh_public_keys(username, info.SSHKeys)
-			}
+		if delete && user_exists(username) {
+			delete_user(username)
 		}
 	}
 
