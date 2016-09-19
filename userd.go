@@ -81,7 +81,7 @@ func gather_json_users(repo string, dest string) map[string]User {
 				} else {
 					valid_groups := []string{}
 					for _, g := range u.Groups {
-						// only include groups that exist on this instances
+						// only include groups that exist on this instance
 						if group_exists(g) {
 							valid_groups = append(valid_groups, g)
 						}
@@ -107,19 +107,6 @@ func user_exists(username string) bool {
 	}
 }
 
-func update_users_groups(username string, attrs User) bool {
-	var cmd *exec.Cmd
-	if len(attrs.Groups) > 0 {
-		log.Printf("Updating user groups: %s: %s", username, attrs.Groups)
-		cmd = exec.Command("usermod", "-G", strings.Join(attrs.Groups, ","), username)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			log.Printf("Error: Can't update user's groups: %s: %s %s", username, err, output)
-			return false
-		}
-	}
-	return true
-}
-
 func create_user(username string, attrs User) bool {
 	log.Printf("Creating user: %s", username)
 	var cmd *exec.Cmd
@@ -143,8 +130,8 @@ func delete_user(username string) bool {
 }
 
 // add public key to ~/.ssh/authorized_keys, over-writes existing public key file
-func set_ssh_public_keys(username string, keys []string) bool {
-	key_data := strings.Join(keys, "\n")
+func set_ssh_public_keys(username string, attrs User) bool {
+	key_data := strings.Join(attrs.SSHKeys, "\n")
 	log.Printf("Setting ssh keys for %s (...%s)", username, strings.TrimSpace(key_data[len(key_data)-50:]))
 	var buffer bytes.Buffer
 	buffer.WriteString(key_data)
@@ -154,6 +141,19 @@ func set_ssh_public_keys(username string, keys []string) bool {
 	}
 	// os.Chown isn't working, not sure why, use native chown instead
 	exec.Command("chown", "-R", username+":"+username, "/home/"+username+"/.ssh").Run()
+	return true
+}
+
+func update_users_groups(username string, attrs User) bool {
+	var cmd *exec.Cmd
+	if len(attrs.Groups) > 0 {
+		log.Printf("Updating user groups: %s: %s", username, attrs.Groups)
+		cmd = exec.Command("usermod", "-G", strings.Join(attrs.Groups, ","), username)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			log.Printf("Error: Can't update user's groups: %s: %s %s", username, err, output)
+			return false
+		}
+	}
 	return true
 }
 
@@ -174,6 +174,15 @@ func get_ops() (string, string) {
 	return *realm, *repo
 }
 
+func in_range(needle string, haystack []string) bool {
+	for _, v := range haystack {
+		if v == needle {
+			return true
+		}
+	}
+	return false
+}
+
 func main() {
 	log.SetPrefix("userd ")
 
@@ -183,19 +192,14 @@ func main() {
 	users := gather_json_users(repo, "/tmp/")
 
 	for username, info := range users {
-		delete := true
-		for _, r := range info.Realms {
-			if r == realm || strings.ToLower(r) == "all" {
-				delete = false
-				if user_exists(username) == false {
-					create_user(username, info)
-				}
-				update_users_groups(username, info)
-				set_ssh_public_keys(username, info.SSHKeys)
-				break
+		if in_range(realm, info.Realms) || in_range("all", info.Realms) {
+			if !user_exists(username) {
+				create_user(username, info)
 			}
-		}
-		if delete && user_exists(username) {
+			update_users_groups(username, info)
+			set_ssh_public_keys(username, info)
+
+		} else if user_exists(username) {
 			delete_user(username)
 		}
 	}
