@@ -153,8 +153,7 @@ func set_ssh_public_keys(username string, keys []string) bool {
 		log.Printf("Error: Can't write ~/.ssh/authorized_keys file for user: %s: %s", username, err)
 	}
 	// os.Chown isn't working, not sure why, use native chown instead
-	var cmd *exec.Cmd
-	cmd = exec.Command("chown", "-R", username+":"+username, "/home/"+username+"/.ssh").Run()
+	exec.Command("chown", "-R", username+":"+username, "/home/"+username+"/.ssh").Run()
 	return true
 }
 
