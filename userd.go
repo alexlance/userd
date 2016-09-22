@@ -69,7 +69,7 @@ func gather_json_users(repo string, dest string) map[string]User {
 	for _, f := range files {
 		fname := f.Name()
 		if f.IsDir() == false && len(fname) > 5 && strings.ToLower(fname[len(fname)-5:]) == ".json" {
-			content, err := ioutil.ReadFile(fname)
+			content, err := ioutil.ReadFile(path.Join(dest, dir, fname))
 			if err != nil {
 				log.Printf("Error: Trouble reading file: %s %s", fname, err)
 			} else {
