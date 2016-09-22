@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"regexp"
 	"strings"
 )
 
@@ -40,7 +39,7 @@ func validate(realm string, repo string) {
 }
 
 // go and grab a git repo full of json users
-func pull_or_clone(repo string, dest string) {
+func git_clone_or_pull(repo string, dest string) {
 	dir := path.Base(strings.Split(repo, " ")[0])
 	var cmd *exec.Cmd
 	if os.Chdir(path.Join(dest, dir)) == nil {
@@ -63,37 +62,39 @@ func gather_json_users(repo string, dest string) map[string]User {
 	dir := path.Base(strings.Split(repo, " ")[0])
 	files, err := ioutil.ReadDir(path.Join(dest, dir))
 	if err != nil {
-		log.Fatal("Error: ", err)
+		log.Fatalf("Error: Can't read dir: %s %s", path.Join(dest, dir), err)
 	}
 	users := make(map[string]User)
-	just_usernames := []string{}
-	re := regexp.MustCompile(`\s+`)
+	usernames := []string{}
 	for _, f := range files {
-		name := f.Name()
-		if f.IsDir() != true && len(name) > 5 && strings.ToLower(name[len(name)-5:]) == ".json" {
-			if content, err := ioutil.ReadFile(name); err == nil {
+		fname := f.Name()
+		if f.IsDir() == false && len(fname) > 5 && strings.ToLower(fname[len(fname)-5:]) == ".json" {
+			content, err := ioutil.ReadFile(fname)
+			if err != nil {
+				log.Printf("Error: Trouble reading file: %s %s", fname, err)
+			} else {
 				var u User
-				compact := strings.TrimSpace(string(re.ReplaceAll(content, []byte(" "))))
+				compact := strings.Join(strings.Fields(string(content)), "")
 				if err := json.Unmarshal(content, &u); err != nil {
-					log.Printf("%s: Error: Parse or type error in JSON: %s", name, compact)
+					log.Printf("%s: Error: Parse or type error in JSON: %s", fname, compact)
 				} else if u.Username == "" {
-					log.Printf("%s: Error: Missing 'username' in JSON: %s", name, compact)
+					log.Printf("%s: Error: Missing 'username' in JSON: %s", fname, compact)
 				} else {
 					valid_groups := []string{}
 					for _, g := range u.Groups {
 						// only include groups that exist on this instance
-						if group_exists(g) {
+						if exec.Command("getent", "group", g).Run() == nil {
 							valid_groups = append(valid_groups, g)
 						}
 					}
 					u.Groups = valid_groups
 					users[u.Username] = u
-					just_usernames = append(just_usernames, u.Username)
+					usernames = append(usernames, u.Username)
 				}
 			}
 		}
 	}
-	log.Printf("Gathered %d users: %s", len(users), just_usernames)
+	log.Printf("Gathered %d users: %s", len(users), usernames)
 	return users
 }
 
@@ -157,16 +158,6 @@ func update_users_groups(username string, attrs User) bool {
 	return true
 }
 
-func group_exists(group string) bool {
-	var cmd *exec.Cmd
-	cmd = exec.Command("getent", "group", group)
-	if _, err := cmd.CombinedOutput(); err == nil {
-		return true
-	} else {
-		return false
-	}
-}
-
 func get_ops() (string, string) {
 	realm := flag.String("realm", "", "the instance's realm eg: red, green, shunter")
 	repo := flag.String("repo", "", "git repo where users are stored")
@@ -188,7 +179,7 @@ func main() {
 
 	realm, repo := get_ops()
 	validate(realm, repo)
-	pull_or_clone(repo, "/tmp/")
+	git_clone_or_pull(repo, "/tmp/")
 	users := gather_json_users(repo, "/tmp/")
 
 	for username, info := range users {
