@@ -15,6 +15,7 @@ import (
 // structure of user definition json files
 type User struct {
 	Username string   `json:"username"`
+	Comment  string   `json:"comment"`
 	Groups   []string `json:"groups"`
 	Realms   []string `json:"realms"`
 	SSHKeys  []string `json:"ssh_keys"`
@@ -149,7 +150,7 @@ func update_users_groups(username string, attrs User) bool {
 	var cmd *exec.Cmd
 	if len(attrs.Groups) > 0 {
 		log.Printf("Updating user groups: %s: %s", username, attrs.Groups)
-		cmd = exec.Command("usermod", "-G", strings.Join(attrs.Groups, ","), username)
+		cmd = exec.Command("usermod", "-G", strings.Join(attrs.Groups, ","), "--comment", attrs.Comment, username)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			log.Printf("Error: Can't update user's groups: %s: %s %s", username, err, output)
 			return false
