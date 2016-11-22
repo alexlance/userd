@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"sort"
 	"strings"
 )
 
@@ -32,7 +33,7 @@ func validate(realm string, repo string) {
 	if os.Geteuid() != 0 {
 		log.Fatalf("Error: Bad user id (%d), must run as root", os.Geteuid())
 	}
-	for _, cmd := range []string{"adduser", "deluser", "usermod", "git", "id", "getent"} {
+	for _, cmd := range []string{"adduser", "deluser", "usermod", "git", "id", "getent", "groups"} {
 		if _, err := exec.LookPath(cmd); err != nil {
 			log.Fatalf("Error: Command not found: %s", cmd)
 		}
@@ -43,19 +44,20 @@ func validate(realm string, repo string) {
 func git_clone_or_pull(repo string, dest string) {
 	dir := path.Base(strings.Split(repo, " ")[0])
 	var cmd *exec.Cmd
+	msg := "git "
 	if os.Chdir(path.Join(dest, dir)) == nil {
-		log.Println("Running git pull")
+		msg += "pull "
 		exec.Command("git", "reset", "--hard").Run()
 		cmd = exec.Command("git", "pull")
 	} else {
-		log.Println("Running git clone")
+		msg += "clone "
 		cmd = exec.Command("git", "clone", repo, path.Join(dest, dir))
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Fatal("Error: ", err)
+		log.Fatal(msg, repo, " error: ", err)
 	}
-	log.Print("git: " + string(out))
+	log.Print(msg, repo, ": ", string(out))
 }
 
 // gather all the users together who are meant to be in this instance's realm
@@ -88,6 +90,10 @@ func gather_json_users(repo string, dest string) map[string]User {
 							valid_groups = append(valid_groups, g)
 						}
 					}
+
+					// sort them now, to make string comparisons simpler later on
+					sort.Strings(u.SSHKeys)
+					sort.Strings(valid_groups)
 					u.Groups = valid_groups
 					users[u.Username] = u
 					usernames = append(usernames, u.Username)
@@ -95,7 +101,7 @@ func gather_json_users(repo string, dest string) map[string]User {
 			}
 		}
 	}
-	log.Printf("Gathered %d users: %s", len(users), usernames)
+	// log.Printf("Gathered %d users: %s", len(users), usernames)
 	return users
 }
 
@@ -133,13 +139,23 @@ func delete_user(username string) bool {
 
 // add public key to ~/.ssh/authorized_keys, over-writes existing public key file
 func set_ssh_public_keys(username string, attrs User) bool {
+	key_file := "/home/" + username + "/.ssh/authorized_keys"
 	key_data := strings.Join(attrs.SSHKeys, "\n")
-	log.Printf("Setting ssh keys for %s (...%s)", username, strings.TrimSpace(key_data[len(key_data)-50:]))
-	var buffer bytes.Buffer
-	buffer.WriteString(key_data)
-	os.Mkdir("/home/"+username+"/.ssh", 0700)
-	if err := ioutil.WriteFile("/home/"+username+"/.ssh/authorized_keys", buffer.Bytes(), 0600); err != nil {
-		log.Printf("Error: Can't write ~/.ssh/authorized_keys file for user: %s: %s", username, err)
+
+	file_data := []string{}
+	if buf, err := ioutil.ReadFile(key_file); err == nil {
+		file_data = strings.Split(string(buf), "\n")
+		sort.Strings(file_data)
+	}
+
+	if strings.Join(attrs.SSHKeys, ",") != strings.Join(file_data, ",") {
+		log.Printf("Setting ssh keys for %s (...%s)", username, strings.TrimSpace(key_data[len(key_data)-50:]))
+		var buffer bytes.Buffer
+		buffer.WriteString(key_data)
+		os.Mkdir("/home/"+username+"/.ssh", 0700)
+		if err := ioutil.WriteFile(key_file, buffer.Bytes(), 0600); err != nil {
+			log.Printf("Error: Can't write %s file for user %s: %s", key_file, username, err)
+		}
 	}
 	// os.Chown isn't working, not sure why, use native chown instead
 	exec.Command("chown", "-R", username+":"+username, "/home/"+username+"/.ssh").Run()
@@ -149,11 +165,21 @@ func set_ssh_public_keys(username string, attrs User) bool {
 func update_users_groups(username string, attrs User) bool {
 	var cmd *exec.Cmd
 	if len(attrs.Groups) > 0 {
-		log.Printf("Updating user groups: %s: %s", username, attrs.Groups)
-		cmd = exec.Command("usermod", "-G", strings.Join(attrs.Groups, ","), "--comment", attrs.Comment, username)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			log.Printf("Error: Can't update user's groups: %s: %s %s", username, err, output)
-			return false
+		cmd = exec.Command("groups", username)
+		if output, err := cmd.CombinedOutput(); err == nil {
+			o := strings.TrimSpace(string(output))
+			o = strings.Replace(o, username+" : "+username+" ", "", 1)
+			existingGroups := strings.Split(o, " ")
+			sort.Strings(existingGroups)
+
+			if strings.Join(existingGroups, ",") != strings.Join(attrs.Groups, ",") {
+				log.Printf("Updating user groups for %s: %s", username, attrs.Groups)
+				cmd = exec.Command("usermod", "-G", strings.Join(attrs.Groups, ","), "--comment", attrs.Comment, username)
+				if output, err := cmd.CombinedOutput(); err != nil {
+					log.Printf("Error: Can't update user's groups for %s: %s %s", username, err, output)
+					return false
+				}
+			}
 		}
 	}
 	return true
