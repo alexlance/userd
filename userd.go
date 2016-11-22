@@ -41,23 +41,26 @@ func validate(realm string, repo string) {
 }
 
 // go and grab a git repo full of json users
-func git_clone_or_pull(repo string, dest string) {
+func git_clone(repo string, dest string) {
 	dir := path.Base(strings.Split(repo, " ")[0])
 	var cmd *exec.Cmd
-	msg := "git "
-	if os.Chdir(path.Join(dest, dir)) == nil {
-		msg += "pull "
-		exec.Command("git", "reset", "--hard").Run()
-		cmd = exec.Command("git", "pull")
-	} else {
-		msg += "clone "
-		cmd = exec.Command("git", "clone", repo, path.Join(dest, dir))
+
+	if path.Join(dest, dir) == path.Join(dest) {
+		log.Fatal("Error: exiting, can't get the base name of ", repo, " dir: ", dir)
 	}
+
+	// remove repo if already exists, this is cleaner than pulling
+	if _, err := os.Stat(path.Join(dest, dir)); err == nil {
+		exec.Command("rm", "-rf", path.Join(dest, dir)).Run()
+	}
+
+	cmd = exec.Command("git", "clone", repo, path.Join(dest, dir))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Fatal(msg, repo, " error: ", err)
+		log.Fatal("git clone ", repo, ": Error: ", err)
 	}
-	log.Print(msg, repo, ": ", string(out))
+	exec.Command("chmod", "-R", "700", path.Join(dest, dir)).Run()
+	log.Print("git clone ", repo, ": ", string(out))
 }
 
 // gather all the users together who are meant to be in this instance's realm
@@ -206,8 +209,8 @@ func main() {
 
 	realm, repo := get_ops()
 	validate(realm, repo)
-	git_clone_or_pull(repo, "/tmp/")
-	users := gather_json_users(repo, "/tmp/")
+	git_clone(repo, "/etc/")
+	users := gather_json_users(repo, "/etc/")
 
 	for username, info := range users {
 		if in_range(realm, info.Realms) || in_range("all", info.Realms) {
