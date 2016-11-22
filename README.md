@@ -1,10 +1,11 @@
-# userd
+# User management daemon: userd
 
-A daemon to administrate user accounts. Using a git repository of JSON user definitions
+A daemon to administrate user accounts. Using a git repository of JSON user definitions. Run it via cron every so
+often.
 
 # Usage
 
-    userd --realm production --repo https://github.com/someone/users/
+    */15 * * * * root userd --realm production --repo https://github.com/someone/users/
     
 # Users repo should have one json file per person, eg jsmith.json:
 
