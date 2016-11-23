@@ -5,7 +5,7 @@ often.
 
 # Usage
 
-    */15 * * * * root userd --realm production --repo https://github.com/someone/users/
+    */15 * * * * root /usr/bin/userd --realm production --repo https://github.com/someone/users/
     
 # Users repo should have one json file per person, eg jsmith.json:
 
@@ -13,6 +13,8 @@ often.
       "username": "jsmith",
       "comment": "Jane Smith",
       "groups": ["admin", "sudo"],
+      "shell": "/bin/bash",
+      "password": "encrypted-password-hash",
       "realms": ["production","development"],
       "ssh_keys": [
           "ssh-ed25519 AAAAC3NzaKYCoqgI7JQGXzMQ jsmith@home"
