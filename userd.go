@@ -17,6 +17,8 @@ import (
 type User struct {
 	Username string   `json:"username"`
 	Comment  string   `json:"comment"`
+	Password string   `json:"password"`
+	Shell    string   `json:"shell"`
 	Groups   []string `json:"groups"`
 	Realms   []string `json:"realms"`
 	SSHKeys  []string `json:"ssh_keys"`
@@ -94,6 +96,10 @@ func gather_json_users(repo string, dest string) map[string]User {
 						}
 					}
 
+					if u.Shell == "" {
+						u.Shell = "/bin/bash"
+					}
+
 					// sort them now, to make string comparisons simpler later on
 					sort.Strings(u.SSHKeys)
 					sort.Strings(valid_groups)
@@ -125,6 +131,26 @@ func create_user(username string, attrs User) bool {
 	if _, err := cmd.CombinedOutput(); err != nil {
 		log.Printf("Error: Can't create user: %s: %s", username, err)
 		return false
+	}
+	return true
+}
+
+func update_user(username string, attrs User) bool {
+	log.Printf("Updating user: %s", username)
+	var cmd *exec.Cmd
+	if attrs.Shell != "" {
+		cmd = exec.Command("usermod", "--shell", attrs.Shell, username)
+		if _, err := cmd.CombinedOutput(); err != nil {
+			log.Printf("Error: Can't update user: %s: %s", username, err)
+			return false
+		}
+	}
+	if attrs.Password != "" {
+		cmd = exec.Command("usermod", "--password", attrs.Password, username)
+		if _, err := cmd.CombinedOutput(); err != nil {
+			log.Printf("Error: Can't update user: %s: %s", username, err)
+			return false
+		}
 	}
 	return true
 }
@@ -217,6 +243,7 @@ func main() {
 			if !user_exists(username) {
 				create_user(username, info)
 			}
+			update_user(username, info)
 			update_users_groups(username, info)
 			set_ssh_public_keys(username, info)
 
