@@ -95,11 +95,6 @@ func gather_json_users(repo string, dest string) map[string]User {
 							valid_groups = append(valid_groups, g)
 						}
 					}
-
-					if u.Shell == "" {
-						u.Shell = "/bin/bash"
-					}
-
 					// sort them now, to make string comparisons simpler later on
 					sort.Strings(u.SSHKeys)
 					sort.Strings(valid_groups)
@@ -136,19 +131,26 @@ func create_user(username string, attrs User) bool {
 }
 
 func update_user(username string, attrs User) bool {
-	log.Printf("Updating user: %s", username)
 	var cmd *exec.Cmd
-	if attrs.Shell != "" {
+
+	outp, _ := exec.Command("getent", "shadow", username).CombinedOutput()
+	current_password := strings.TrimSpace(strings.Split(string(outp), ":")[1])
+	outs, _ := exec.Command("getent", "passwd", username).CombinedOutput()
+	current_shell := strings.TrimSpace(strings.Split(string(outs), ":")[6])
+
+	if attrs.Shell != current_shell {
+		log.Printf("Updating shell for %s to %s", username, attrs.Shell)
 		cmd = exec.Command("usermod", "--shell", attrs.Shell, username)
 		if _, err := cmd.CombinedOutput(); err != nil {
-			log.Printf("Error: Can't update user: %s: %s", username, err)
+			log.Printf("Error: Can't update shell for %s: %s", username, err)
 			return false
 		}
 	}
-	if attrs.Password != "" {
+	if attrs.Password != current_password {
+		log.Printf("Updating password for %s to %s", username, attrs.Password)
 		cmd = exec.Command("usermod", "--password", attrs.Password, username)
 		if _, err := cmd.CombinedOutput(); err != nil {
-			log.Printf("Error: Can't update user: %s: %s", username, err)
+			log.Printf("Error: Can't update password for %s: %s", username, err)
 			return false
 		}
 	}
@@ -178,7 +180,11 @@ func set_ssh_public_keys(username string, attrs User) bool {
 	}
 
 	if strings.Join(attrs.SSHKeys, ",") != strings.Join(file_data, ",") {
-		log.Printf("Setting ssh keys for %s (...%s)", username, strings.TrimSpace(key_data[len(key_data)-50:]))
+		tail := 0
+		if len(key_data) > 50 {
+			tail = len(key_data) - 50
+		}
+		log.Printf("Setting ssh keys for %s (...%s)", username, strings.TrimSpace(key_data[tail:]))
 		var buffer bytes.Buffer
 		buffer.WriteString(key_data)
 		os.Mkdir("/home/"+username+"/.ssh", 0700)
