@@ -237,7 +237,7 @@ func in_range(needle string, haystack []string) bool {
 }
 
 func main() {
-	log.SetPrefix("userd ")
+	log.SetPrefix("userd v1.3 ")
 
 	realm, repo := get_ops()
 	validate(realm, repo)
