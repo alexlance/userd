@@ -249,9 +249,12 @@ func main() {
 			if !user_exists(username) {
 				create_user(username, info)
 			}
-			update_user(username, info)
-			update_users_groups(username, info)
-			set_ssh_public_keys(username, info)
+
+			if user_exists(username) {
+				update_user(username, info)
+				update_users_groups(username, info)
+				set_ssh_public_keys(username, info)
+			}
 
 		} else if user_exists(username) {
 			delete_user(username)
