@@ -147,7 +147,7 @@ func update_user(username string, attrs User) bool {
 		}
 	}
 	if attrs.Password != current_password {
-		log.Printf("Updating password for %s to %s", username, attrs.Password)
+		log.Printf("Updating password for %s", username)
 		cmd = exec.Command("usermod", "--password", attrs.Password, username)
 		if _, err := cmd.CombinedOutput(); err != nil {
 			log.Printf("Error: Can't update password for %s: %s", username, err)
@@ -237,7 +237,7 @@ func in_range(needle string, haystack []string) bool {
 }
 
 func main() {
-	log.SetPrefix("userd v1.3 ")
+	log.SetPrefix("userd v1.4 ")
 
 	realm, repo := get_ops()
 	validate(realm, repo)
