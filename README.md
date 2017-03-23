@@ -12,10 +12,10 @@ often.
     {
       "username": "jsmith",
       "comment": "Jane Smith",
-      "groups": ["admin", "sudo"],
+      "realms": ["production","development"],
+      "groups": ["admin", "sudo:development"],
       "shell": "/bin/bash",
       "password": "encrypted-password-hash",
-      "realms": ["production","development"],
       "ssh_keys": [
           "ssh-ed25519 AAAAC3NzaKYCoqgI7JQGXzMQ jsmith@home"
       ]
