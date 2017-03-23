@@ -66,7 +66,7 @@ func git_clone(repo string, dest string) {
 }
 
 // gather all the users together who are meant to be in this instance's realm
-func gather_json_users(repo string, dest string) map[string]User {
+func gather_json_users(repo string, dest string, realm string) map[string]User {
 	dir := path.Base(strings.Split(repo, " ")[0])
 	files, err := ioutil.ReadDir(path.Join(dest, dir))
 	if err != nil {
@@ -90,6 +90,13 @@ func gather_json_users(repo string, dest string) map[string]User {
 				} else {
 					valid_groups := []string{}
 					for _, g := range u.Groups {
+						// per realm groups, eg: sudo:realm1:realm2:realm3
+						if gr := strings.Split(g, ":"); len(gr) > 1 {
+							g = gr[0]
+							if !in_range(realm, gr[1:]) {
+								continue
+							}
+						}
 						// only include groups that exist on this instance
 						if exec.Command("getent", "group", g).Run() == nil {
 							valid_groups = append(valid_groups, g)
@@ -237,12 +244,12 @@ func in_range(needle string, haystack []string) bool {
 }
 
 func main() {
-	log.SetPrefix("userd v1.4 ")
+	log.SetPrefix("userd v1.5 ")
 
 	realm, repo := get_ops()
 	validate(realm, repo)
 	git_clone(repo, "/etc/")
-	users := gather_json_users(repo, "/etc/")
+	users := gather_json_users(repo, "/etc/", realm)
 
 	for username, info := range users {
 		if in_range(realm, info.Realms) || in_range("all", info.Realms) {
