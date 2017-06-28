@@ -19,6 +19,7 @@ type User struct {
 	Comment  string   `json:"comment"`
 	Password string   `json:"password"`
 	Shell    string   `json:"shell"`
+	Home     string   `json:"home"`
 	Groups   []string `json:"groups"`
 	Realms   []string `json:"realms"`
 	SSHKeys  []string `json:"ssh_keys"`
@@ -102,6 +103,15 @@ func gather_json_users(repo string, dest string, realm string) map[string]User {
 							valid_groups = append(valid_groups, g)
 						}
 					}
+
+					if u.Home == "" {
+						u.Home = "/home/" + u.Username
+					} else {
+						u.Home = path.Clean(u.Home)
+					}
+					if u.Shell == "" {
+						u.Shell = "/bin/bash"
+					}
 					// sort them now, to make string comparisons simpler later on
 					sort.Strings(u.SSHKeys)
 					sort.Strings(valid_groups)
@@ -129,7 +139,13 @@ func user_exists(username string) bool {
 func create_user(username string, attrs User) bool {
 	log.Printf("Creating user: %s", username)
 	var cmd *exec.Cmd
-	cmd = exec.Command("adduser", "--home", "/home/"+username, "--shell", "/bin/bash", "--disabled-password", username)
+
+	// ensure directory containing homedir exists
+	if _, err := os.Stat(path.Dir(attrs.Home)); err != nil {
+		exec.Command("mkdir", "-p", path.Dir(attrs.Home)).Run()
+	}
+
+	cmd = exec.Command("adduser", "--home", attrs.Home, "--shell", attrs.Shell, "--disabled-password", username)
 	if _, err := cmd.CombinedOutput(); err != nil {
 		log.Printf("Error: Can't create user: %s: %s", username, err)
 		return false
@@ -142,8 +158,10 @@ func update_user(username string, attrs User) bool {
 
 	outp, _ := exec.Command("getent", "shadow", username).CombinedOutput()
 	current_password := strings.TrimSpace(strings.Split(string(outp), ":")[1])
+
 	outs, _ := exec.Command("getent", "passwd", username).CombinedOutput()
 	current_shell := strings.TrimSpace(strings.Split(string(outs), ":")[6])
+	current_home := strings.TrimSpace(strings.Split(string(outs), ":")[5])
 
 	if attrs.Shell != current_shell {
 		log.Printf("Updating shell for %s to %s", username, attrs.Shell)
@@ -158,6 +176,20 @@ func update_user(username string, attrs User) bool {
 		cmd = exec.Command("usermod", "--password", attrs.Password, username)
 		if _, err := cmd.CombinedOutput(); err != nil {
 			log.Printf("Error: Can't update password for %s: %s", username, err)
+			return false
+		}
+	}
+	if attrs.Home != current_home {
+		log.Printf("Updating home for %s from %s to %s", username, current_home, attrs.Home)
+
+		// ensure directory containing homedir exists
+		if _, err := os.Stat(path.Dir(attrs.Home)); err != nil {
+			exec.Command("mkdir", "-p", path.Dir(attrs.Home)).Run()
+		}
+
+		cmd = exec.Command("usermod", "-m", "--home", attrs.Home, username)
+		if _, err := cmd.CombinedOutput(); err != nil {
+			log.Printf("Error: Can't update home for %s: %s", username, err)
 			return false
 		}
 	}
@@ -177,7 +209,7 @@ func delete_user(username string) bool {
 
 // add public key to ~/.ssh/authorized_keys, over-writes existing public key file
 func set_ssh_public_keys(username string, attrs User) bool {
-	key_file := "/home/" + username + "/.ssh/authorized_keys"
+	key_file := path.Join(attrs.Home, ".ssh", "authorized_keys")
 	key_data := strings.Join(attrs.SSHKeys, "\n")
 
 	file_data := []string{}
@@ -194,13 +226,13 @@ func set_ssh_public_keys(username string, attrs User) bool {
 		log.Printf("Setting ssh keys for %s (...%s)", username, strings.TrimSpace(key_data[tail:]))
 		var buffer bytes.Buffer
 		buffer.WriteString(key_data)
-		os.Mkdir("/home/"+username+"/.ssh", 0700)
+		os.Mkdir(path.Join(attrs.Home, ".ssh"), 0700)
 		if err := ioutil.WriteFile(key_file, buffer.Bytes(), 0600); err != nil {
 			log.Printf("Error: Can't write %s file for user %s: %s", key_file, username, err)
 		}
 	}
 	// os.Chown isn't working, not sure why, use native chown instead
-	exec.Command("chown", "-R", username+":"+username, "/home/"+username+"/.ssh").Run()
+	exec.Command("chown", "-R", username+":"+username, path.Join(attrs.Home, ".ssh")).Run()
 	return true
 }
 
@@ -244,7 +276,7 @@ func in_range(needle string, haystack []string) bool {
 }
 
 func main() {
-	log.SetPrefix("userd v1.5 ")
+	log.SetPrefix("userd v1.6 ")
 
 	realm, repo := get_ops()
 	validate(realm, repo)
