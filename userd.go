@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-// structure of user definition json files
+// User account modelled in a json file
 type User struct {
 	Username string   `json:"username"`
 	Comment  string   `json:"comment"`
@@ -44,7 +44,7 @@ func validate(realm string, repo string) {
 }
 
 // go and grab a git repo full of json users
-func git_clone(repo string, dest string) {
+func gitClone(repo string, dest string) {
 	dir := path.Base(strings.Split(repo, " ")[0])
 	var cmd *exec.Cmd
 
@@ -67,7 +67,7 @@ func git_clone(repo string, dest string) {
 }
 
 // gather all the users together who are meant to be in this instance's realm
-func gather_json_users(repo string, dest string, realm string) map[string]User {
+func gatherJSONUsers(repo string, dest string, realm string) map[string]User {
 	dir := path.Base(strings.Split(repo, " ")[0])
 	files, err := ioutil.ReadDir(path.Join(dest, dir))
 	if err != nil {
@@ -89,18 +89,18 @@ func gather_json_users(repo string, dest string, realm string) map[string]User {
 				} else if u.Username == "" {
 					log.Printf("%s: Error: Missing 'username' in JSON: %s", fname, compact)
 				} else {
-					valid_groups := []string{}
+					validGroups := []string{}
 					for _, g := range u.Groups {
 						// per realm groups, eg: sudo:realm1:realm2:realm3
 						if gr := strings.Split(g, ":"); len(gr) > 1 {
 							g = gr[0]
-							if !in_range(realm, gr[1:]) {
+							if !inRange(realm, gr[1:]) {
 								continue
 							}
 						}
 						// only include groups that exist on this instance
 						if exec.Command("getent", "group", g).Run() == nil {
-							valid_groups = append(valid_groups, g)
+							validGroups = append(validGroups, g)
 						}
 					}
 
@@ -114,8 +114,8 @@ func gather_json_users(repo string, dest string, realm string) map[string]User {
 					}
 					// sort them now, to make string comparisons simpler later on
 					sort.Strings(u.SSHKeys)
-					sort.Strings(valid_groups)
-					u.Groups = valid_groups
+					sort.Strings(validGroups)
+					u.Groups = validGroups
 					users[u.Username] = u
 					usernames = append(usernames, u.Username)
 				}
@@ -126,17 +126,16 @@ func gather_json_users(repo string, dest string, realm string) map[string]User {
 	return users
 }
 
-func user_exists(username string) bool {
+func userExists(username string) bool {
 	var cmd *exec.Cmd
 	cmd = exec.Command("id", username)
 	if _, err := cmd.CombinedOutput(); err == nil {
 		return true
-	} else {
-		return false
 	}
+	return false
 }
 
-func create_user(username string, attrs User) bool {
+func createUser(username string, attrs User) bool {
 	log.Printf("Creating user: %s", username)
 	var cmd *exec.Cmd
 
@@ -153,17 +152,17 @@ func create_user(username string, attrs User) bool {
 	return true
 }
 
-func update_user(username string, attrs User) bool {
+func updateUser(username string, attrs User) bool {
 	var cmd *exec.Cmd
 
 	outp, _ := exec.Command("getent", "shadow", username).CombinedOutput()
-	current_password := strings.TrimSpace(strings.Split(string(outp), ":")[1])
+	currentPassword := strings.TrimSpace(strings.Split(string(outp), ":")[1])
 
 	outs, _ := exec.Command("getent", "passwd", username).CombinedOutput()
-	current_shell := strings.TrimSpace(strings.Split(string(outs), ":")[6])
-	current_home := strings.TrimSpace(strings.Split(string(outs), ":")[5])
+	currentShell := strings.TrimSpace(strings.Split(string(outs), ":")[6])
+	currentHome := strings.TrimSpace(strings.Split(string(outs), ":")[5])
 
-	if attrs.Shell != current_shell {
+	if attrs.Shell != currentShell {
 		log.Printf("Updating shell for %s to %s", username, attrs.Shell)
 		cmd = exec.Command("usermod", "--shell", attrs.Shell, username)
 		if _, err := cmd.CombinedOutput(); err != nil {
@@ -171,7 +170,7 @@ func update_user(username string, attrs User) bool {
 			return false
 		}
 	}
-	if attrs.Password != current_password {
+	if attrs.Password != currentPassword {
 		log.Printf("Updating password for %s", username)
 		cmd = exec.Command("usermod", "--password", attrs.Password, username)
 		if _, err := cmd.CombinedOutput(); err != nil {
@@ -179,8 +178,8 @@ func update_user(username string, attrs User) bool {
 			return false
 		}
 	}
-	if attrs.Home != current_home {
-		log.Printf("Updating home for %s from %s to %s", username, current_home, attrs.Home)
+	if attrs.Home != currentHome {
+		log.Printf("Updating home for %s from %s to %s", username, currentHome, attrs.Home)
 
 		// ensure directory containing homedir exists
 		if _, err := os.Stat(path.Dir(attrs.Home)); err != nil {
@@ -196,7 +195,7 @@ func update_user(username string, attrs User) bool {
 	return true
 }
 
-func delete_user(username string) bool {
+func deleteUser(username string) bool {
 	log.Printf("Deleting user: %s", username)
 	var cmd *exec.Cmd
 	cmd = exec.Command("deluser", "--remove-home", username)
@@ -208,27 +207,27 @@ func delete_user(username string) bool {
 }
 
 // add public key to ~/.ssh/authorized_keys, over-writes existing public key file
-func set_ssh_public_keys(username string, attrs User) bool {
-	key_file := path.Join(attrs.Home, ".ssh", "authorized_keys")
-	key_data := strings.Join(attrs.SSHKeys, "\n")
+func setSSHPublicKeys(username string, attrs User) bool {
+	keyFile := path.Join(attrs.Home, ".ssh", "authorized_keys")
+	keyData := strings.Join(attrs.SSHKeys, "\n")
 
-	file_data := []string{}
-	if buf, err := ioutil.ReadFile(key_file); err == nil {
-		file_data = strings.Split(string(buf), "\n")
-		sort.Strings(file_data)
+	fileData := []string{}
+	if buf, err := ioutil.ReadFile(keyFile); err == nil {
+		fileData = strings.Split(string(buf), "\n")
+		sort.Strings(fileData)
 	}
 
-	if strings.Join(attrs.SSHKeys, ",") != strings.Join(file_data, ",") {
+	if strings.Join(attrs.SSHKeys, ",") != strings.Join(fileData, ",") {
 		tail := 0
-		if len(key_data) > 50 {
-			tail = len(key_data) - 50
+		if len(keyData) > 50 {
+			tail = len(keyData) - 50
 		}
-		log.Printf("Setting ssh keys for %s (...%s)", username, strings.TrimSpace(key_data[tail:]))
+		log.Printf("Setting ssh keys for %s (...%s)", username, strings.TrimSpace(keyData[tail:]))
 		var buffer bytes.Buffer
-		buffer.WriteString(key_data)
+		buffer.WriteString(keyData)
 		os.Mkdir(path.Join(attrs.Home, ".ssh"), 0700)
-		if err := ioutil.WriteFile(key_file, buffer.Bytes(), 0600); err != nil {
-			log.Printf("Error: Can't write %s file for user %s: %s", key_file, username, err)
+		if err := ioutil.WriteFile(keyFile, buffer.Bytes(), 0600); err != nil {
+			log.Printf("Error: Can't write %s file for user %s: %s", keyFile, username, err)
 		}
 	}
 	// os.Chown isn't working, not sure why, use native chown instead
@@ -236,7 +235,7 @@ func set_ssh_public_keys(username string, attrs User) bool {
 	return true
 }
 
-func update_users_groups(username string, attrs User) bool {
+func updateUsersGroups(username string, attrs User) bool {
 	var cmd *exec.Cmd
 	if len(attrs.Groups) > 0 {
 		cmd = exec.Command("groups", username)
@@ -259,14 +258,14 @@ func update_users_groups(username string, attrs User) bool {
 	return true
 }
 
-func get_ops() (string, string) {
+func getOps() (string, string) {
 	realm := flag.String("realm", "", "the instance's realm eg: red, green, shunter")
 	repo := flag.String("repo", "", "git repo where users are stored")
 	flag.Parse()
 	return *realm, *repo
 }
 
-func in_range(needle string, haystack []string) bool {
+func inRange(needle string, haystack []string) bool {
 	for _, v := range haystack {
 		if v == needle {
 			return true
@@ -278,25 +277,25 @@ func in_range(needle string, haystack []string) bool {
 func main() {
 	log.SetPrefix("userd v1.6 ")
 
-	realm, repo := get_ops()
+	realm, repo := getOps()
 	validate(realm, repo)
-	git_clone(repo, "/etc/")
-	users := gather_json_users(repo, "/etc/", realm)
+	gitClone(repo, "/etc/")
+	users := gatherJSONUsers(repo, "/etc/", realm)
 
 	for username, info := range users {
-		if in_range(realm, info.Realms) || in_range("all", info.Realms) {
-			if !user_exists(username) {
-				create_user(username, info)
+		if inRange(realm, info.Realms) || inRange("all", info.Realms) {
+			if !userExists(username) {
+				createUser(username, info)
 			}
 
-			if user_exists(username) {
-				update_user(username, info)
-				update_users_groups(username, info)
-				set_ssh_public_keys(username, info)
+			if userExists(username) {
+				updateUser(username, info)
+				updateUsersGroups(username, info)
+				setSSHPublicKeys(username, info)
 			}
 
-		} else if user_exists(username) {
-			delete_user(username)
+		} else if userExists(username) {
+			deleteUser(username)
 		}
 	}
 }
