@@ -52,7 +52,7 @@ func gitClone(repo string, dir string) {
 		log.Fatal("git clone ", repo, ": Error: ", err)
 	}
 	exec.Command("chmod", "-R", "700", dir).Run()
-	log.Print("git clone ", repo, ": ", string(out))
+	log.Print("git clone ", repo, ": ", strings.Replace(string(out), "\n", " ", -1))
 }
 
 // gather all the users together who are meant to be in this instance's realm
