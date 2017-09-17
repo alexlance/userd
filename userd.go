@@ -85,6 +85,10 @@ func gatherJSONUsers(repo string, dir string, realm string) map[string]User {
 								continue
 							}
 						}
+						// ignore user's primary group, shouldn't mess with that
+						if g == u.Username {
+							continue
+						}
 						// only include groups that exist on this instance
 						if exec.Command("getent", "group", g).Run() == nil {
 							validGroups = append(validGroups, g)
@@ -225,9 +229,11 @@ func updateUsersGroups(username string, attrs User) bool {
 	if len(attrs.Groups) > 0 {
 		cmd = exec.Command("groups", username)
 		if output, err := cmd.CombinedOutput(); err == nil {
-			o := strings.TrimSpace(string(output))
-			o = strings.Replace(o, username+" : "+username+" ", "", 1)
+			o := string(output)
+			o = strings.Replace(o, username+" :", "", 1)
+			o = strings.TrimSpace(o)
 			existingGroups := strings.Split(o, " ")
+			existingGroups = removeInRange(username, existingGroups) // ignore the user's primary group (same name as username)
 			sort.Strings(existingGroups)
 
 			if strings.Join(existingGroups, ",") != strings.Join(attrs.Groups, ",") {
@@ -257,6 +263,16 @@ func inRange(needle string, haystack []string) bool {
 		}
 	}
 	return false
+}
+
+func removeInRange(needle string, haystack []string) []string {
+	r := []string{}
+	for _, v := range haystack {
+		if v != needle {
+			r = append(r, v)
+		}
+	}
+	return r
 }
 
 func main() {
