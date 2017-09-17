@@ -44,41 +44,28 @@ func validate(realm string, repo string) {
 }
 
 // go and grab a git repo full of json users
-func gitClone(repo string, dest string) {
-	dir := path.Base(strings.Split(repo, " ")[0])
+func gitClone(repo string, dir string) {
 	var cmd *exec.Cmd
-
-	if path.Join(dest, dir) == path.Join(dest) {
-		log.Fatal("Error: exiting, can't get the base name of ", repo, " dir: ", dir)
-	}
-
-	// remove repo if already exists, this is cleaner than pulling
-	if _, err := os.Stat(path.Join(dest, dir)); err == nil {
-		exec.Command("rm", "-rf", path.Join(dest, dir)).Run()
-	}
-
-	cmd = exec.Command("git", "clone", repo, path.Join(dest, dir))
+	cmd = exec.Command("git", "clone", repo, dir)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Fatal("git clone ", repo, ": Error: ", err)
 	}
-	exec.Command("chmod", "-R", "700", path.Join(dest, dir)).Run()
+	exec.Command("chmod", "-R", "700", dir).Run()
 	log.Print("git clone ", repo, ": ", string(out))
 }
 
 // gather all the users together who are meant to be in this instance's realm
-func gatherJSONUsers(repo string, dest string, realm string) map[string]User {
-	dir := path.Base(strings.Split(repo, " ")[0])
-	files, err := ioutil.ReadDir(path.Join(dest, dir))
+func gatherJSONUsers(repo string, dir string, realm string) map[string]User {
+	files, err := ioutil.ReadDir(dir)
 	if err != nil {
-		log.Fatalf("Error: Can't read dir: %s %s", path.Join(dest, dir), err)
+		log.Fatalf("Error: Can't read dir: %s %s", dir, err)
 	}
 	users := make(map[string]User)
-	usernames := []string{}
 	for _, f := range files {
 		fname := f.Name()
 		if f.IsDir() == false && len(fname) > 5 && strings.ToLower(fname[len(fname)-5:]) == ".json" {
-			content, err := ioutil.ReadFile(path.Join(dest, dir, fname))
+			content, err := ioutil.ReadFile(path.Join(dir, fname))
 			if err != nil {
 				log.Printf("Error: Trouble reading file: %s %s", fname, err)
 			} else {
@@ -117,12 +104,10 @@ func gatherJSONUsers(repo string, dest string, realm string) map[string]User {
 					sort.Strings(validGroups)
 					u.Groups = validGroups
 					users[u.Username] = u
-					usernames = append(usernames, u.Username)
 				}
 			}
 		}
 	}
-	// log.Printf("Gathered %d users: %s", len(users), usernames)
 	return users
 }
 
@@ -279,8 +264,16 @@ func main() {
 
 	realm, repo := getOps()
 	validate(realm, repo)
-	gitClone(repo, "/etc/")
-	users := gatherJSONUsers(repo, "/etc/", realm)
+
+	// make a temp dir to work in
+	dir, err := ioutil.TempDir(os.TempDir(), "userd")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	gitClone(repo, dir)
+	users := gatherJSONUsers(repo, dir, realm)
 
 	for username, info := range users {
 		if inRange(realm, info.Realms) || inRange("all", info.Realms) {
