@@ -4,6 +4,9 @@
   "realms": ["thingo", "operations-git"],
   "groups": [
     "admin",
+    "disk",
+    "audio:operations-git",
+    "fax:operations-*",
     "sudo:operations-*"
   ],
   "password": "",
