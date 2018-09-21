@@ -1,7 +1,7 @@
 {
   "username": "alla",
   "comment": "Alex Lance",
-  "realms": ["all"],
+  "realms": ["*"],
   "groups": ["admin", "sudo"],
   "password": "",
   "shell": "/bin/bash",
