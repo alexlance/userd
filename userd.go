@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -46,13 +47,13 @@ func validate(realm string, repo string) {
 // go and grab a git repo full of json users
 func gitClone(repo string, dir string) {
 	var cmd *exec.Cmd
-	cmd = exec.Command("git", "clone", repo, dir)
+	cmd = exec.Command("git", "clone", "--depth", "1", repo, dir)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Fatal("git clone ", repo, ": Error: ", err)
 	}
 	exec.Command("chmod", "-R", "700", dir).Run()
-	log.Print("git clone ", repo, ": ", strings.Replace(string(out), "\n", " ", -1))
+	log.Print("git clone --depth 1 ", repo, ": ", strings.Replace(string(out), "\n", " ", -1))
 }
 
 // gather all the users together who are meant to be in this instance's realm
@@ -81,7 +82,7 @@ func gatherJSONUsers(repo string, dir string, realm string) map[string]User {
 						// per realm groups, eg: sudo:realm1:realm2:realm3
 						if gr := strings.Split(g, ":"); len(gr) > 1 {
 							g = gr[0]
-							if !inRange(realm, gr[1:]) {
+							if !inRangePattern(realm, gr[1:]) {
 								continue
 							}
 						}
@@ -256,9 +257,10 @@ func getOps() (string, string) {
 	return *realm, *repo
 }
 
-func inRange(needle string, haystack []string) bool {
+func inRangePattern(needle string, haystack []string) bool {
 	for _, v := range haystack {
-		if v == needle {
+		// filepath.Match performs glob/wildcard matching
+		if match, _ := filepath.Match(v, needle); match || v == needle {
 			return true
 		}
 	}
@@ -276,7 +278,7 @@ func removeInRange(needle string, haystack []string) []string {
 }
 
 func main() {
-	log.SetPrefix("userd v1.7 ")
+	log.SetPrefix("userd v1.8 ")
 
 	realm, repo := getOps()
 	validate(realm, repo)
@@ -292,7 +294,7 @@ func main() {
 	users := gatherJSONUsers(repo, dir, realm)
 
 	for username, info := range users {
-		if inRange(realm, info.Realms) || inRange("all", info.Realms) {
+		if inRangePattern(realm, info.Realms) {
 			if !userExists(username) {
 				createUser(username, info)
 			}
