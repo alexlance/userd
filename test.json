@@ -1,7 +1,7 @@
 {
   "username": "alla",
   "comment": "Alex Lance",
-  "realms": ["operations-git"],
+  "realms": ["operations-*"],
   "groups": ["admin", "sudo"],
   "password": "",
   "shell": "/bin/bash",
