@@ -1,12 +1,10 @@
 {
   "username": "alla",
   "comment": "Alex Lance",
-  "realms": ["operations-git"],
+  "realms": ["*"],
   "groups": [
     "admin",
-    "disk",
-    "audio:operations-git",
-    "sudo:operations-blah"
+    "sudo:operations-*"
   ],
   "password": "",
   "shell": "/bin/bash",
