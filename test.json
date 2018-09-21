@@ -6,7 +6,7 @@
     "admin",
     "disk",
     "audio:operations-git",
-    "sudo:operations-*"
+    "sudo:operations-blah"
   ],
   "password": "",
   "shell": "/bin/bash",
