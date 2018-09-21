@@ -1,8 +1,11 @@
 {
   "username": "alla",
   "comment": "Alex Lance",
-  "realms": ["operations-*"],
-  "groups": ["admin", "sudo"],
+  "realms": ["thingo"],
+  "groups": [
+    "admin",
+    "sudo:operations-*"
+  ],
   "password": "",
   "shell": "/bin/bash",
   "ssh_keys": [
