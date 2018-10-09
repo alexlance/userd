@@ -12,6 +12,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"gopkg.in/src-d/go-git.v4"
+	"gopkg.in/src-d/go-git.v4/plumbing/object"
+	"gopkg.in/src-d/go-git.v4/storage/memory"
 )
 
 // User account modelled in a json file
@@ -28,91 +32,88 @@ type User struct {
 
 // initial checks, all systems go?
 func validate(realm string, repo string) {
-	if realm == "" {
-		log.Fatal("Error: Empty argument --realm")
-	}
 	if repo == "" {
 		log.Fatal("Error: Empty argument --repo")
+	}
+	if realm == "" {
+		log.Fatal("Error: Empty argument --realm")
 	}
 	if os.Geteuid() != 0 {
 		log.Fatalf("Error: Bad user id (%d), must run as root", os.Geteuid())
 	}
-	for _, cmd := range []string{"adduser", "deluser", "usermod", "git", "id", "getent", "groups"} {
+	for _, cmd := range []string{"adduser", "deluser", "usermod", "id", "getent", "groups"} {
 		if _, err := exec.LookPath(cmd); err != nil {
 			log.Fatalf("Error: Command not found: %s", cmd)
 		}
 	}
 }
 
-// go and grab a git repo full of json users
-func gitClone(repo string, dir string) {
-	var cmd *exec.Cmd
-	cmd = exec.Command("git", "clone", "--depth", "1", repo, dir)
-	out, err := cmd.CombinedOutput()
+// clone a git repo full of json users into memory
+func gitClone(repo string) *git.Repository {
+	r, err := git.Clone(memory.NewStorage(), nil, &git.CloneOptions{
+		URL:   repo,
+		Depth: 1,
+	})
 	if err != nil {
 		log.Fatal("git clone ", repo, ": Error: ", err)
 	}
-	exec.Command("chmod", "-R", "700", dir).Run()
-	log.Print("git clone --depth 1 ", repo, ": ", strings.Replace(string(out), "\n", " ", -1))
+	log.Print("git clone ", repo)
+	return r
 }
 
 // gather all the users together who are meant to be in this instance's realm
-func gatherJSONUsers(repo string, dir string, realm string) map[string]User {
-	files, err := ioutil.ReadDir(dir)
-	if err != nil {
-		log.Fatalf("Error: Can't read dir: %s %s", dir, err)
-	}
+func gatherJSONUsers(repo string, r *git.Repository, realm string) map[string]User {
 	users := make(map[string]User)
-	for _, f := range files {
-		fname := f.Name()
-		if f.IsDir() == false && len(fname) > 5 && strings.ToLower(fname[len(fname)-5:]) == ".json" {
-			content, err := ioutil.ReadFile(path.Join(dir, fname))
-			if err != nil {
-				log.Printf("Error: Trouble reading file: %s %s", fname, err)
+	ref, _ := r.Head()
+	commit, _ := r.CommitObject(ref.Hash())
+	tree, _ := commit.Tree()
+
+	tree.Files().ForEach(func(f *object.File) error {
+		var u User
+		if len(f.Name) > 5 && strings.ToLower(f.Name[len(f.Name)-5:]) == ".json" {
+			content, _ := f.Contents()
+			compact := strings.Join(strings.Fields(content), "")
+			if err := json.Unmarshal([]byte(content), &u); err != nil {
+				log.Printf("%s: Error: Parse or type error in JSON: %s", f.Name, compact)
+			} else if u.Username == "" {
+				log.Printf("%s: Error: Missing 'username' in JSON: %s", f.Name, compact)
 			} else {
-				var u User
-				compact := strings.Join(strings.Fields(string(content)), "")
-				if err := json.Unmarshal(content, &u); err != nil {
-					log.Printf("%s: Error: Parse or type error in JSON: %s", fname, compact)
-				} else if u.Username == "" {
-					log.Printf("%s: Error: Missing 'username' in JSON: %s", fname, compact)
-				} else {
-					validGroups := []string{}
-					for _, g := range u.Groups {
-						// per realm groups, eg: sudo:realm1:realm2:realm3
-						if gr := strings.Split(g, ":"); len(gr) > 1 {
-							g = gr[0]
-							if !inRangePattern(realm, gr[1:]) {
-								continue
-							}
-						}
-						// ignore user's primary group, shouldn't mess with that
-						if g == u.Username {
+				validGroups := []string{}
+				for _, g := range u.Groups {
+					// per realm groups, eg: sudo:realm1:realm2:realm3
+					if gr := strings.Split(g, ":"); len(gr) > 1 {
+						g = gr[0]
+						if !inRangePattern(realm, gr[1:]) {
 							continue
 						}
-						// only include groups that exist on this instance
-						if exec.Command("getent", "group", g).Run() == nil {
-							validGroups = append(validGroups, g)
-						}
 					}
-
-					if u.Home == "" {
-						u.Home = "/home/" + u.Username
-					} else {
-						u.Home = path.Clean(u.Home)
+					// ignore user's primary group, shouldn't mess with that
+					if g == u.Username {
+						continue
 					}
-					if u.Shell == "" {
-						u.Shell = "/bin/bash"
+					// only include groups that exist on this instance
+					if exec.Command("getent", "group", g).Run() == nil {
+						validGroups = append(validGroups, g)
 					}
-					// sort them now, to make string comparisons simpler later on
-					sort.Strings(u.SSHKeys)
-					sort.Strings(validGroups)
-					u.Groups = validGroups
-					users[u.Username] = u
 				}
+
+				if u.Home == "" {
+					u.Home = "/home/" + u.Username
+				} else {
+					u.Home = path.Clean(u.Home)
+				}
+				if u.Shell == "" {
+					u.Shell = "/bin/bash"
+				}
+				// sort them now, to make string comparisons simpler later on
+				sort.Strings(u.SSHKeys)
+				sort.Strings(validGroups)
+				u.Groups = validGroups
+				users[u.Username] = u
 			}
 		}
-	}
+		return nil
+	})
 	return users
 }
 
@@ -283,15 +284,8 @@ func main() {
 	realm, repo := getOps()
 	validate(realm, repo)
 
-	// make a temp dir to work in
-	dir, err := ioutil.TempDir(os.TempDir(), "userd")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-
-	gitClone(repo, dir)
-	users := gatherJSONUsers(repo, dir, realm)
+	r := gitClone(repo)
+	users := gatherJSONUsers(repo, r, realm)
 
 	for username, info := range users {
 		if inRangePattern(realm, info.Realms) {
