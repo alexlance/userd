@@ -279,7 +279,7 @@ func removeInRange(needle string, haystack []string) []string {
 }
 
 func main() {
-	log.SetPrefix("userd v1.8 ")
+	log.SetPrefix("userd v1.9 ")
 
 	realm, repo := getOps()
 	validate(realm, repo)
