@@ -47,6 +47,7 @@ type User struct {
 	SSHKeys  []string `json:"ssh_keys"`
 }
 
+// for debugging
 func info(msg string) {
 	if debug {
 		log.Printf("DEBUG: %s", msg)
@@ -121,6 +122,7 @@ func gatherRepoUsers(repo string, r *git.Repository, realm string) map[string]Us
 	return users
 }
 
+// check the groups that are available on this system
 func removeInvalidGroups(groups []string, username string, realm string) (goodGroups []string) {
 	for _, g := range groups {
 		// per realm groups, eg: sudo:realm1:realm2:realm3
@@ -143,6 +145,7 @@ func removeInvalidGroups(groups []string, username string, realm string) (goodGr
 	return goodGroups
 }
 
+// check if a user account exists on this system
 func userExists(username string) bool {
 	if _, err := user.Lookup(username); err == nil {
 		return true
@@ -150,6 +153,7 @@ func userExists(username string) bool {
 	return false
 }
 
+// create a new user account
 func createUser(username string, attrs User) bool {
 	log.Printf("Creating user: %s", username)
 	// ensure directory containing homedir exists
@@ -164,50 +168,18 @@ func createUser(username string, attrs User) bool {
 	return true
 }
 
-func updateShell(username string, shell string) bool {
-	log.Printf("Updating shell for %s to %s", username, shell)
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changeShellCommand, shell, username))
+// delete a user account
+func deleteUser(username string) bool {
+	log.Printf("Deleting user: %s", username)
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(delUserCommand, username))
 	if _, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("Error: Can't update shell for %s: %s", username, err)
+		log.Printf("Error: Can't delete user: %s: %s", username, err)
 		return false
 	}
 	return true
 }
 
-func updatePassword(username string, password string) bool {
-	log.Printf("Updating password for %s", username)
-	info(fmt.Sprintf("New password: %s", password))
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changePasswordCommand, password, username))
-	if _, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("Error: Can't update password for %s: %s", username, err)
-		return false
-	}
-	return true
-}
-
-func updateHome(username string, home string) bool {
-	log.Printf("Updating home dir for %s to %s", username, home)
-	if _, err := os.Stat(path.Dir(home)); err != nil {
-		exec.Command("mkdir", "-p", path.Dir(home)).Run()
-	}
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changeHomeDirCommand, home, username))
-	if _, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("Error: Can't update home dir for %s: %s", username, err)
-		return false
-	}
-	return true
-}
-
-func updateComment(username string, comment string) bool {
-	log.Printf("Updating comment for %s to %s", username, comment)
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changeCommentCommand, comment, username))
-	if _, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("Error: Can't update comment for %s: %s", username, err)
-		return false
-	}
-	return true
-}
-
+// update the details of an existing user account
 func updateUser(username string, attrs User) bool {
 	outp, _ := exec.Command("getent", "shadow", username).CombinedOutput()
 	currentPassword := strings.TrimSpace(strings.Split(string(outp), ":")[1])
@@ -245,17 +217,80 @@ func updateUser(username string, attrs User) bool {
 	return true
 }
 
-func deleteUser(username string) bool {
-	log.Printf("Deleting user: %s", username)
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(delUserCommand, username))
+// change user's default shell
+func updateShell(username string, shell string) bool {
+	log.Printf("Updating shell for %s to %s", username, shell)
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changeShellCommand, shell, username))
 	if _, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("Error: Can't delete user: %s: %s", username, err)
+		log.Printf("Error: Can't update shell for %s: %s", username, err)
 		return false
 	}
 	return true
 }
 
-// add public key to ~/.ssh/authorized_keys, over-writes existing public key file
+// change users password
+func updatePassword(username string, password string) bool {
+	log.Printf("Updating password for %s", username)
+	info(fmt.Sprintf("New password: %s", password))
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changePasswordCommand, password, username))
+	if _, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("Error: Can't update password for %s: %s", username, err)
+		return false
+	}
+	return true
+}
+
+// change users home directory
+func updateHome(username string, home string) bool {
+	log.Printf("Updating home dir for %s to %s", username, home)
+	if _, err := os.Stat(path.Dir(home)); err != nil {
+		exec.Command("mkdir", "-p", path.Dir(home)).Run()
+	}
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changeHomeDirCommand, home, username))
+	if _, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("Error: Can't update home dir for %s: %s", username, err)
+		return false
+	}
+	return true
+}
+
+// change users gecos comment
+func updateComment(username string, comment string) bool {
+	log.Printf("Updating comment for %s to %s", username, comment)
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changeCommentCommand, comment, username))
+	if _, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("Error: Can't update comment for %s: %s", username, err)
+		return false
+	}
+	return true
+}
+
+// get the list of groups a user belongs to
+func getUserGroups(username string) (groups []string) {
+	u, _ := user.Lookup(username)
+	gids, _ := u.GroupIds()
+	for _, gid := range gids {
+		group, _ := user.LookupGroupId(gid)
+		if group.Name != username { // ignore the user's primary group (same name as username)
+			groups = append(groups, group.Name)
+		}
+	}
+	sort.Strings(groups)
+	return groups
+}
+
+// change a users list of groups they belong to
+func updateGroups(username string, groups []string) bool {
+	log.Printf("Updating user groups for %s: %s", username, groups)
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changeGroupsCommand, strings.Join(groups, ","), username))
+	if output, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("Error: Can't update user's groups for %s: %s %s", username, err, output)
+		return false
+	}
+	return true
+}
+
+// update the user's ~/.ssh/authorized_keys file with their public keys
 func updateSSHPublicKeys(username string, attrs User) bool {
 	keyFile := path.Join(attrs.Home, ".ssh", "authorized_keys")
 	keyData := strings.Join(attrs.SSHKeys, "\n")
@@ -276,29 +311,7 @@ func updateSSHPublicKeys(username string, attrs User) bool {
 	return true
 }
 
-func getUserGroups(username string) (groups []string) {
-	u, _ := user.Lookup(username)
-	gids, _ := u.GroupIds()
-	for _, gid := range gids {
-		group, _ := user.LookupGroupId(gid)
-		if group.Name != username { // ignore the user's primary group (same name as username)
-			groups = append(groups, group.Name)
-		}
-	}
-	sort.Strings(groups)
-	return groups
-}
-
-func updateGroups(username string, groups []string) bool {
-	log.Printf("Updating user groups for %s: %s", username, groups)
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changeGroupsCommand, strings.Join(groups, ","), username))
-	if output, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("Error: Can't update user's groups for %s: %s %s", username, err, output)
-		return false
-	}
-	return true
-}
-
+// search for a close match in a range
 func inRangePattern(needle string, haystack []string) bool {
 	for _, v := range haystack {
 		// filepath.Match performs glob/wildcard matching
