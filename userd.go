@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -17,6 +18,16 @@ import (
 	"gopkg.in/src-d/go-git.v4"
 	"gopkg.in/src-d/go-git.v4/plumbing/object"
 	"gopkg.in/src-d/go-git.v4/storage/memory"
+)
+
+const (
+	addUserCommand        = `adduser --disabled-password %s`
+	delUserCommand        = `deluser --remove-home %s`
+	changeShellCommand    = `usermod --shell %s %s`
+	changePasswordCommand = `usermod --password '%s' %s`
+	changeHomeDirCommand  = `usermod --move-home --home %s %s`
+	changeGroupsCommand   = `usermod --groups %s %s`
+	changeCommentCommand  = `usermod --comment "%s" %s`
 )
 
 // User account modelled in a json file
@@ -136,60 +147,87 @@ func createUser(username string, attrs User) bool {
 		exec.Command("mkdir", "-p", path.Dir(attrs.Home)).Run()
 	}
 
-	cmd = exec.Command("adduser", "--home", attrs.Home, "--shell", attrs.Shell, "--disabled-password", username)
+	cmd = exec.Command("/bin/sh", "-c", fmt.Sprintf(addUserCommand, username))
 	if _, err := cmd.CombinedOutput(); err != nil {
 		log.Printf("Error: Can't create user: %s: %s", username, err)
+		return false
+	}
+
+	updateHome(username, attrs.Home)
+	updateShell(username, attrs.Shell)
+
+	return true
+}
+
+func updateShell(username string, shell string) bool {
+	log.Printf("Updating shell for %s to %s", username, shell)
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changeShellCommand, shell, username))
+	if _, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("Error: Can't update shell for %s: %s", username, err)
+		return false
+	}
+	return true
+}
+
+func updatePassword(username string, password string) bool {
+	log.Printf("Updating password for %s", username)
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changePasswordCommand, password, username))
+	if _, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("Error: Can't update password for %s: %s", username, err)
+		return false
+	}
+	return true
+}
+
+func updateHome(username string, home string) bool {
+	log.Printf("Updating home for %s to %s", username, home)
+	if _, err := os.Stat(path.Dir(home)); err != nil {
+		exec.Command("mkdir", "-p", path.Dir(home)).Run()
+	}
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changeHomeDirCommand, home, username))
+	if _, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("Error: Can't update home dir for %s: %s", username, err)
+		return false
+	}
+	return true
+}
+
+func updateComment(username string, comment string) bool {
+	log.Printf("Updating comment for %s to %s", username, comment)
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changeCommentCommand, comment, username))
+	if _, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("Error: Can't update comment for %s: %s", username, err)
 		return false
 	}
 	return true
 }
 
 func updateUser(username string, attrs User) bool {
-	var cmd *exec.Cmd
-
 	outp, _ := exec.Command("getent", "shadow", username).CombinedOutput()
 	currentPassword := strings.TrimSpace(strings.Split(string(outp), ":")[1])
-
 	outs, _ := exec.Command("getent", "passwd", username).CombinedOutput()
 	currentShell := strings.TrimSpace(strings.Split(string(outs), ":")[6])
 	currentHome := strings.TrimSpace(strings.Split(string(outs), ":")[5])
+	currentComment := strings.TrimSpace(strings.Split(string(outs), ":")[4])
 
 	if attrs.Shell != currentShell {
-		log.Printf("Updating shell for %s to %s", username, attrs.Shell)
-		cmd = exec.Command("usermod", "--shell", attrs.Shell, username)
-		if _, err := cmd.CombinedOutput(); err != nil {
-			log.Printf("Error: Can't update shell for %s: %s", username, err)
-			return false
-		}
+		updateShell(username, attrs.Shell)
 	}
 	if attrs.Password != currentPassword {
-		log.Printf("Updating password for %s", username)
-		cmd = exec.Command("usermod", "--password", attrs.Password, username)
-		if _, err := cmd.CombinedOutput(); err != nil {
-			log.Printf("Error: Can't update password for %s: %s", username, err)
-			return false
-		}
+		updatePassword(username, attrs.Password)
 	}
 	if attrs.Home != currentHome {
-		log.Printf("Updating home for %s from %s to %s", username, currentHome, attrs.Home)
-
-		// ensure directory containing homedir exists
-		if _, err := os.Stat(path.Dir(attrs.Home)); err != nil {
-			exec.Command("mkdir", "-p", path.Dir(attrs.Home)).Run()
-		}
-
-		cmd = exec.Command("usermod", "-m", "--home", attrs.Home, username)
-		if _, err := cmd.CombinedOutput(); err != nil {
-			log.Printf("Error: Can't update home for %s: %s", username, err)
-			return false
-		}
+		updateHome(username, attrs.Home)
+	}
+	if attrs.Comment != currentComment {
+		updateComment(username, attrs.Comment)
 	}
 	return true
 }
 
 func deleteUser(username string) bool {
 	log.Printf("Deleting user: %s", username)
-	cmd := exec.Command("deluser", "--remove-home", username)
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(delUserCommand, username))
 	if _, err := cmd.CombinedOutput(); err != nil {
 		log.Printf("Error: Can't delete user: %s: %s", username, err)
 		return false
@@ -213,7 +251,7 @@ func setSSHPublicKeys(username string, attrs User) bool {
 		if len(keyData) > 50 {
 			tail = len(keyData) - 50
 		}
-		log.Printf("Setting ssh keys for %s (...%s)", username, strings.TrimSpace(keyData[tail:]))
+		log.Printf("Updating ssh keys for %s (...%s)", username, strings.TrimSpace(keyData[tail:]))
 		var buffer bytes.Buffer
 		buffer.WriteString(keyData)
 		os.Mkdir(path.Join(attrs.Home, ".ssh"), 0700)
@@ -244,7 +282,7 @@ func updateUsersGroups(username string, attrs User) bool {
 		existingGroups := getUserGroups(username)
 		if strings.Join(existingGroups, ",") != strings.Join(attrs.Groups, ",") {
 			log.Printf("Updating user groups for %s: %s", username, attrs.Groups)
-			cmd := exec.Command("usermod", "-G", strings.Join(attrs.Groups, ","), "--comment", attrs.Comment, username)
+			cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changeGroupsCommand, strings.Join(attrs.Groups, ","), username))
 			if output, err := cmd.CombinedOutput(); err != nil {
 				log.Printf("Error: Can't update user's groups for %s: %s %s", username, err, output)
 				return false
