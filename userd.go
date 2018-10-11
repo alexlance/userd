@@ -89,7 +89,7 @@ func gatherJSONUsers(repo string, r *git.Repository, realm string) map[string]Us
 				}
 				// sort them now, to make string comparisons simpler later on
 				sort.Strings(u.SSHKeys)
-				u.Groups = removeInvalidGroups(u, realm)
+				u.Groups = removeInvalidGroups(u.Groups, u.Username, realm)
 				users[u.Username] = u
 			}
 		}
@@ -98,8 +98,8 @@ func gatherJSONUsers(repo string, r *git.Repository, realm string) map[string]Us
 	return users
 }
 
-func removeInvalidGroups(attrs User, realm string) (groups []string) {
-	for _, g := range attrs.Groups {
+func removeInvalidGroups(groups []string, username string, realm string) (goodGroups []string) {
+	for _, g := range groups {
 		// per realm groups, eg: sudo:realm1:realm2:realm3
 		if gr := strings.Split(g, ":"); len(gr) > 1 {
 			g = gr[0]
@@ -108,16 +108,16 @@ func removeInvalidGroups(attrs User, realm string) (groups []string) {
 			}
 		}
 		// ignore user's primary group, shouldn't mess with that
-		if g == attrs.Username {
+		if g == username {
 			continue
 		}
 		// only include groups that exist on this instance
 		if _, err := user.LookupGroup(g); err == nil {
-			groups = append(groups, g)
+			goodGroups = append(goodGroups, g)
 		}
 	}
-	sort.Strings(groups)
-	return groups
+	sort.Strings(goodGroups)
+	return goodGroups
 }
 
 func userExists(username string) bool {
