@@ -271,16 +271,6 @@ func inRangePattern(needle string, haystack []string) bool {
 	return false
 }
 
-func removeInRange(needle string, haystack []string) []string {
-	r := []string{}
-	for _, v := range haystack {
-		if v != needle {
-			r = append(r, v)
-		}
-	}
-	return r
-}
-
 func main() {
 	log.SetPrefix("userd v1.9 ")
 
