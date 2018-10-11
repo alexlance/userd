@@ -21,6 +21,7 @@ import (
 )
 
 const (
+	version               = `userd v2.0 `
 	addUserCommand        = `adduser --disabled-password %s`
 	delUserCommand        = `deluser --remove-home %s`
 	changeShellCommand    = `usermod --shell %s %s`
@@ -28,6 +29,10 @@ const (
 	changeHomeDirCommand  = `usermod --move-home --home %s %s`
 	changeGroupsCommand   = `usermod --groups %s %s`
 	changeCommentCommand  = `usermod --comment "%s" %s`
+)
+
+var (
+	debug bool
 )
 
 // User account modelled in a json file
@@ -40,6 +45,12 @@ type User struct {
 	Groups   []string `json:"groups"`
 	Realms   []string `json:"realms"`
 	SSHKeys  []string `json:"ssh_keys"`
+}
+
+func info(msg string) {
+	if debug {
+		log.Printf("DEBUG: %s", msg)
+	}
 }
 
 // initial checks, all systems go?
@@ -74,7 +85,7 @@ func gitClone(repo string) *git.Repository {
 }
 
 // gather all the users together who are meant to be in this instance's realm
-func gatherJSONUsers(repo string, r *git.Repository, realm string) map[string]User {
+func gatherRepoUsers(repo string, r *git.Repository, realm string) map[string]User {
 	users := make(map[string]User)
 	ref, _ := r.Head()
 	commit, _ := r.CommitObject(ref.Hash())
@@ -85,7 +96,8 @@ func gatherJSONUsers(repo string, r *git.Repository, realm string) map[string]Us
 		if len(f.Name) > 5 && strings.ToLower(f.Name[len(f.Name)-5:]) == ".json" {
 			content, _ := f.Contents()
 			compact := strings.Join(strings.Fields(content), "")
-			if err := json.Unmarshal([]byte(content), &u); err != nil {
+			err := json.Unmarshal([]byte(content), &u)
+			if err != nil {
 				log.Printf("%s: Error: Parse or type error in JSON: %s", f.Name, compact)
 			} else if u.Username == "" {
 				log.Printf("%s: Error: Missing 'username' in JSON: %s", f.Name, compact)
@@ -140,22 +152,15 @@ func userExists(username string) bool {
 
 func createUser(username string, attrs User) bool {
 	log.Printf("Creating user: %s", username)
-	var cmd *exec.Cmd
-
 	// ensure directory containing homedir exists
 	if _, err := os.Stat(path.Dir(attrs.Home)); err != nil {
 		exec.Command("mkdir", "-p", path.Dir(attrs.Home)).Run()
 	}
-
-	cmd = exec.Command("/bin/sh", "-c", fmt.Sprintf(addUserCommand, username))
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(addUserCommand, username))
 	if _, err := cmd.CombinedOutput(); err != nil {
 		log.Printf("Error: Can't create user: %s: %s", username, err)
 		return false
 	}
-
-	updateHome(username, attrs.Home)
-	updateShell(username, attrs.Shell)
-
 	return true
 }
 
@@ -171,6 +176,7 @@ func updateShell(username string, shell string) bool {
 
 func updatePassword(username string, password string) bool {
 	log.Printf("Updating password for %s", username)
+	info(fmt.Sprintf("New password: %s", password))
 	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changePasswordCommand, password, username))
 	if _, err := cmd.CombinedOutput(); err != nil {
 		log.Printf("Error: Can't update password for %s: %s", username, err)
@@ -180,7 +186,7 @@ func updatePassword(username string, password string) bool {
 }
 
 func updateHome(username string, home string) bool {
-	log.Printf("Updating home for %s to %s", username, home)
+	log.Printf("Updating home dir for %s to %s", username, home)
 	if _, err := os.Stat(path.Dir(home)); err != nil {
 		exec.Command("mkdir", "-p", path.Dir(home)).Run()
 	}
@@ -209,6 +215,7 @@ func updateUser(username string, attrs User) bool {
 	currentShell := strings.TrimSpace(strings.Split(string(outs), ":")[6])
 	currentHome := strings.TrimSpace(strings.Split(string(outs), ":")[5])
 	currentComment := strings.TrimSpace(strings.Split(string(outs), ":")[4])
+	existingGroups := getUserGroups(username)
 
 	if attrs.Shell != currentShell {
 		updateShell(username, attrs.Shell)
@@ -221,6 +228,19 @@ func updateUser(username string, attrs User) bool {
 	}
 	if attrs.Comment != currentComment {
 		updateComment(username, attrs.Comment)
+	}
+	if strings.Join(existingGroups, ",") != strings.Join(attrs.Groups, ",") {
+		updateGroups(username, attrs.Groups)
+	}
+
+	keyFile := path.Join(attrs.Home, ".ssh", "authorized_keys")
+	fileData := []string{}
+	if buf, err := ioutil.ReadFile(keyFile); err == nil {
+		fileData = strings.Split(string(buf), "\n")
+		sort.Strings(fileData)
+	}
+	if strings.Join(attrs.SSHKeys, ",") != strings.Join(fileData, ",") {
+		updateSSHPublicKeys(username, attrs)
 	}
 	return true
 }
@@ -236,28 +256,20 @@ func deleteUser(username string) bool {
 }
 
 // add public key to ~/.ssh/authorized_keys, over-writes existing public key file
-func setSSHPublicKeys(username string, attrs User) bool {
+func updateSSHPublicKeys(username string, attrs User) bool {
 	keyFile := path.Join(attrs.Home, ".ssh", "authorized_keys")
 	keyData := strings.Join(attrs.SSHKeys, "\n")
-
-	fileData := []string{}
-	if buf, err := ioutil.ReadFile(keyFile); err == nil {
-		fileData = strings.Split(string(buf), "\n")
-		sort.Strings(fileData)
+	tail := 0
+	if len(keyData) > 50 {
+		tail = len(keyData) - 50
 	}
-
-	if strings.Join(attrs.SSHKeys, ",") != strings.Join(fileData, ",") {
-		tail := 0
-		if len(keyData) > 50 {
-			tail = len(keyData) - 50
-		}
-		log.Printf("Updating ssh keys for %s (...%s)", username, strings.TrimSpace(keyData[tail:]))
-		var buffer bytes.Buffer
-		buffer.WriteString(keyData)
-		os.Mkdir(path.Join(attrs.Home, ".ssh"), 0700)
-		if err := ioutil.WriteFile(keyFile, buffer.Bytes(), 0600); err != nil {
-			log.Printf("Error: Can't write %s file for user %s: %s", keyFile, username, err)
-		}
+	log.Printf("Updating ssh keys for %s (...%s)", username, strings.TrimSpace(keyData[tail:]))
+	info(keyData)
+	var buffer bytes.Buffer
+	buffer.WriteString(keyData)
+	os.Mkdir(path.Join(attrs.Home, ".ssh"), 0700)
+	if err := ioutil.WriteFile(keyFile, buffer.Bytes(), 0600); err != nil {
+		log.Printf("Error: Can't write %s file for user %s: %s", keyFile, username, err)
 	}
 	// os.Chown isn't working, not sure why, use native chown instead
 	exec.Command("chown", "-R", username+":"+username, path.Join(attrs.Home, ".ssh")).Run()
@@ -277,26 +289,14 @@ func getUserGroups(username string) (groups []string) {
 	return groups
 }
 
-func updateUsersGroups(username string, attrs User) bool {
-	if len(attrs.Groups) > 0 {
-		existingGroups := getUserGroups(username)
-		if strings.Join(existingGroups, ",") != strings.Join(attrs.Groups, ",") {
-			log.Printf("Updating user groups for %s: %s", username, attrs.Groups)
-			cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changeGroupsCommand, strings.Join(attrs.Groups, ","), username))
-			if output, err := cmd.CombinedOutput(); err != nil {
-				log.Printf("Error: Can't update user's groups for %s: %s %s", username, err, output)
-				return false
-			}
-		}
+func updateGroups(username string, groups []string) bool {
+	log.Printf("Updating user groups for %s: %s", username, groups)
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changeGroupsCommand, strings.Join(groups, ","), username))
+	if output, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("Error: Can't update user's groups for %s: %s %s", username, err, output)
+		return false
 	}
 	return true
-}
-
-func getOps() (string, string) {
-	realm := flag.String("realm", "", "the instance's realm eg: red, green, shunter")
-	repo := flag.String("repo", "", "git repo where users are stored")
-	flag.Parse()
-	return *realm, *repo
 }
 
 func inRangePattern(needle string, haystack []string) bool {
@@ -310,26 +310,24 @@ func inRangePattern(needle string, haystack []string) bool {
 }
 
 func main() {
-	log.SetPrefix("userd v1.9 ")
+	log.SetPrefix(version)
+	var realm string
+	var repo string
+	flag.StringVar(&realm, "realm", "", "the instance's realm eg: red, green, shunter")
+	flag.StringVar(&repo, "repo", "", "git repo where users are stored")
+	flag.BoolVar(&debug, "debug", false, "print debugging info")
+	flag.Parse()
 
-	realm, repo := getOps()
 	validate(realm, repo)
-
 	r := gitClone(repo)
-	users := gatherJSONUsers(repo, r, realm)
+	users := gatherRepoUsers(repo, r, realm)
 
-	for username, info := range users {
-		if inRangePattern(realm, info.Realms) {
+	for username, attrs := range users {
+		if inRangePattern(realm, attrs.Realms) {
 			if !userExists(username) {
-				createUser(username, info)
+				createUser(username, attrs)
 			}
-
-			if userExists(username) {
-				updateUser(username, info)
-				updateUsersGroups(username, info)
-				setSSHPublicKeys(username, info)
-			}
-
+			updateUser(username, attrs)
 		} else if userExists(username) {
 			deleteUser(username)
 		}
