@@ -189,8 +189,7 @@ func updateUser(username string, attrs User) bool {
 
 func deleteUser(username string) bool {
 	log.Printf("Deleting user: %s", username)
-	var cmd *exec.Cmd
-	cmd = exec.Command("deluser", "--remove-home", username)
+	cmd := exec.Command("deluser", "--remove-home", username)
 	if _, err := cmd.CombinedOutput(); err != nil {
 		log.Printf("Error: Can't delete user: %s: %s", username, err)
 		return false
@@ -227,25 +226,28 @@ func setSSHPublicKeys(username string, attrs User) bool {
 	return true
 }
 
-func updateUsersGroups(username string, attrs User) bool {
-	var cmd *exec.Cmd
-	if len(attrs.Groups) > 0 {
-		cmd = exec.Command("groups", username)
-		if output, err := cmd.CombinedOutput(); err == nil {
-			o := string(output)
-			o = strings.Replace(o, username+" :", "", 1)
-			o = strings.TrimSpace(o)
-			existingGroups := strings.Split(o, " ")
-			existingGroups = removeInRange(username, existingGroups) // ignore the user's primary group (same name as username)
-			sort.Strings(existingGroups)
+func getUserGroups(username string) (groups []string) {
+	u, _ := user.Lookup(username)
+	g, _ := u.GroupIds()
+	for _, gid := range g {
+		group, _ := user.LookupGroupId(gid)
+		if group.Name != username { // ignore the user's primary group (same name as username)
+			groups = append(groups, group.Name)
+		}
+	}
+	sort.Strings(groups)
+	return groups
+}
 
-			if strings.Join(existingGroups, ",") != strings.Join(attrs.Groups, ",") {
-				log.Printf("Updating user groups for %s: %s", username, attrs.Groups)
-				cmd = exec.Command("usermod", "-G", strings.Join(attrs.Groups, ","), "--comment", attrs.Comment, username)
-				if output, err := cmd.CombinedOutput(); err != nil {
-					log.Printf("Error: Can't update user's groups for %s: %s %s", username, err, output)
-					return false
-				}
+func updateUsersGroups(username string, attrs User) bool {
+	if len(attrs.Groups) > 0 {
+		existingGroups := getUserGroups(username)
+		if strings.Join(existingGroups, ",") != strings.Join(attrs.Groups, ",") {
+			log.Printf("Updating user groups for %s: %s", username, attrs.Groups)
+			cmd := exec.Command("usermod", "-G", strings.Join(attrs.Groups, ","), "--comment", attrs.Comment, username)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				log.Printf("Error: Can't update user's groups for %s: %s %s", username, err, output)
+				return false
 			}
 		}
 	}
