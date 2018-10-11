@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"os/user"
 	"path"
 	"path/filepath"
 	"sort"
@@ -41,7 +42,7 @@ func validate(realm string, repo string) {
 	if os.Geteuid() != 0 {
 		log.Fatalf("Error: Bad user id (%d), must run as root", os.Geteuid())
 	}
-	for _, cmd := range []string{"adduser", "deluser", "usermod", "id", "getent", "groups"} {
+	for _, cmd := range []string{"adduser", "deluser", "usermod", "getent", "groups"} {
 		if _, err := exec.LookPath(cmd); err != nil {
 			log.Fatalf("Error: Command not found: %s", cmd)
 		}
@@ -120,9 +121,7 @@ func getValidGroups(attrs User, realm string) (groups []string) {
 }
 
 func userExists(username string) bool {
-	var cmd *exec.Cmd
-	cmd = exec.Command("id", username)
-	if _, err := cmd.CombinedOutput(); err == nil {
+	if _, err := user.Lookup(username); err == nil {
 		return true
 	}
 	return false
