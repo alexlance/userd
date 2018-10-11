@@ -112,7 +112,7 @@ func getValidGroups(attrs User, realm string) (groups []string) {
 			continue
 		}
 		// only include groups that exist on this instance
-		if exec.Command("getent", "group", g).Run() == nil {
+		if _, err := user.LookupGroup(g); err == nil {
 			groups = append(groups, g)
 		}
 	}
