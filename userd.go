@@ -89,7 +89,7 @@ func gatherJSONUsers(repo string, r *git.Repository, realm string) map[string]Us
 				}
 				// sort them now, to make string comparisons simpler later on
 				sort.Strings(u.SSHKeys)
-				u.Groups = getValidGroups(u, realm)
+				u.Groups = removeInvalidGroups(u, realm)
 				users[u.Username] = u
 			}
 		}
@@ -98,7 +98,7 @@ func gatherJSONUsers(repo string, r *git.Repository, realm string) map[string]Us
 	return users
 }
 
-func getValidGroups(attrs User, realm string) (groups []string) {
+func removeInvalidGroups(attrs User, realm string) (groups []string) {
 	for _, g := range attrs.Groups {
 		// per realm groups, eg: sudo:realm1:realm2:realm3
 		if gr := strings.Split(g, ":"); len(gr) > 1 {
