@@ -42,7 +42,7 @@ func validate(realm string, repo string) {
 	if os.Geteuid() != 0 {
 		log.Fatalf("Error: Bad user id (%d), must run as root", os.Geteuid())
 	}
-	for _, cmd := range []string{"adduser", "deluser", "usermod", "getent", "groups"} {
+	for _, cmd := range []string{"adduser", "deluser", "usermod", "getent"} {
 		if _, err := exec.LookPath(cmd); err != nil {
 			log.Fatalf("Error: Command not found: %s", cmd)
 		}
@@ -228,8 +228,8 @@ func setSSHPublicKeys(username string, attrs User) bool {
 
 func getUserGroups(username string) (groups []string) {
 	u, _ := user.Lookup(username)
-	g, _ := u.GroupIds()
-	for _, gid := range g {
+	gids, _ := u.GroupIds()
+	for _, gid := range gids {
 		group, _ := user.LookupGroupId(gid)
 		if group.Name != username { // ignore the user's primary group (same name as username)
 			groups = append(groups, group.Name)
