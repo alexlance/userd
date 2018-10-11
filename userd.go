@@ -78,25 +78,6 @@ func gatherJSONUsers(repo string, r *git.Repository, realm string) map[string]Us
 			} else if u.Username == "" {
 				log.Printf("%s: Error: Missing 'username' in JSON: %s", f.Name, compact)
 			} else {
-				validGroups := []string{}
-				for _, g := range u.Groups {
-					// per realm groups, eg: sudo:realm1:realm2:realm3
-					if gr := strings.Split(g, ":"); len(gr) > 1 {
-						g = gr[0]
-						if !inRangePattern(realm, gr[1:]) {
-							continue
-						}
-					}
-					// ignore user's primary group, shouldn't mess with that
-					if g == u.Username {
-						continue
-					}
-					// only include groups that exist on this instance
-					if exec.Command("getent", "group", g).Run() == nil {
-						validGroups = append(validGroups, g)
-					}
-				}
-
 				if u.Home == "" {
 					u.Home = "/home/" + u.Username
 				} else {
@@ -107,14 +88,35 @@ func gatherJSONUsers(repo string, r *git.Repository, realm string) map[string]Us
 				}
 				// sort them now, to make string comparisons simpler later on
 				sort.Strings(u.SSHKeys)
-				sort.Strings(validGroups)
-				u.Groups = validGroups
+				u.Groups = getValidGroups(u, realm)
 				users[u.Username] = u
 			}
 		}
 		return nil
 	})
 	return users
+}
+
+func getValidGroups(attrs User, realm string) (groups []string) {
+	for _, g := range attrs.Groups {
+		// per realm groups, eg: sudo:realm1:realm2:realm3
+		if gr := strings.Split(g, ":"); len(gr) > 1 {
+			g = gr[0]
+			if !inRangePattern(realm, gr[1:]) {
+				continue
+			}
+		}
+		// ignore user's primary group, shouldn't mess with that
+		if g == attrs.Username {
+			continue
+		}
+		// only include groups that exist on this instance
+		if exec.Command("getent", "group", g).Run() == nil {
+			groups = append(groups, g)
+		}
+	}
+	sort.Strings(groups)
+	return groups
 }
 
 func userExists(username string) bool {
