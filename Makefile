@@ -6,3 +6,7 @@ test:
 .PHONY: shell
 shell:
 	docker run -it -v $${GOPATH}/bin:/root/bin golang:stretch bash
+
+.PHONY: install
+install:
+	go install -ldflags "-s -w"
