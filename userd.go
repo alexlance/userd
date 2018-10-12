@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	version               = `userd v2.0 `
+	version               = `userd v1.10 `
 	addUserCommand        = `adduser --disabled-password %s`
 	delUserCommand        = `deluser --remove-home %s`
 	changeShellCommand    = `usermod --shell %s %s`
