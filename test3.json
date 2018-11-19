@@ -1,0 +1,13 @@
+{
+  "username": "andy",
+  "comment": "Andy Hsieh",
+  "realms": ["door"],
+  "groups": [
+    "andy"
+  ],
+  "password": "",
+  "shell": "/bin/bash",
+  "ssh_keys": [
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGCSvhp4GMS7dRQHHy3+Lb8vDyeup2vBqocm4L32ntq0 alla@mint"
+  ]
+}
