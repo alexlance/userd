@@ -1,10 +1,8 @@
 {
   "username": "andy",
   "comment": "Andy Hsieh",
-  "realms": ["door"],
-  "groups": [
-    "andy"
-  ],
+  "realms": ["all"],
+  "groups": ["andy"],
   "password": "",
   "shell": "/bin/bash",
   "ssh_keys": [
