@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	version               = `userd v1.10 `
+	version               = `userd v1.11 `
 	addUserCommand        = `adduser --disabled-password %s`
 	delUserCommand        = `deluser --remove-home %s`
 	changeShellCommand    = `usermod --shell %s %s`
@@ -281,11 +281,13 @@ func getUserGroups(username string) (groups []string) {
 
 // change a users list of groups they belong to
 func updateGroups(username string, groups []string) bool {
-	log.Printf("Updating user groups for %s: %s", username, groups)
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changeGroupsCommand, strings.Join(groups, ","), username))
-	if output, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("Error: Can't update user's groups for %s: %s %s", username, err, output)
-		return false
+	if len(groups) > 0 {
+		log.Printf("Updating user groups for %s: %s", username, groups)
+		cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changeGroupsCommand, strings.Join(groups, ","), username))
+		if output, err := cmd.CombinedOutput(); err != nil {
+			log.Printf("Error: Can't update user's groups for %s: %s %s", username, err, output)
+			return false
+		}
 	}
 	return true
 }
