@@ -184,7 +184,7 @@ func updateUser(username string, attrs User) bool {
 	outp, _ := exec.Command("getent", "shadow", username).CombinedOutput()
 
 	var currentPassword string
-	if string(outp) != "" {
+	if strings.Contains(string(outp), ":") {
 		currentPassword = strings.TrimSpace(strings.Split(string(outp), ":")[1])
 	}
 	outs, _ := exec.Command("getent", "passwd", username).CombinedOutput()
