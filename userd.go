@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	version               = `userd v1.11 `
+	version               = `userd v1.12 `
 	addUserCommand        = `adduser --disabled-password %s`
 	delUserCommand        = `deluser --remove-home %s`
 	changeShellCommand    = `usermod --shell %s %s`
@@ -182,7 +182,11 @@ func deleteUser(username string) bool {
 // update the details of an existing user account
 func updateUser(username string, attrs User) bool {
 	outp, _ := exec.Command("getent", "shadow", username).CombinedOutput()
-	currentPassword := strings.TrimSpace(strings.Split(string(outp), ":")[1])
+
+	var currentPassword string
+	if strings.Contains(string(outp), ":") {
+		currentPassword = strings.TrimSpace(strings.Split(string(outp), ":")[1])
+	}
 	outs, _ := exec.Command("getent", "passwd", username).CombinedOutput()
 	currentShell := strings.TrimSpace(strings.Split(string(outs), ":")[6])
 	currentHome := strings.TrimSpace(strings.Split(string(outs), ":")[5])
