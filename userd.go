@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	version               = `userd v1.12 `
+	version               = `userd v1.13 `
 	addUserCommand        = `adduser --disabled-password %s`
 	delUserCommand        = `deluser --remove-home %s`
 	changeShellCommand    = `usermod --shell %s %s`
@@ -344,9 +344,12 @@ func main() {
 	for username, attrs := range users {
 		if inRangePattern(realm, attrs.Realms) {
 			if !userExists(username) {
-				createUser(username, attrs)
+				if createUser(username, attrs) {
+					updateUser(username, attrs)
+				}
+			} else {
+				updateUser(username, attrs)
 			}
-			updateUser(username, attrs)
 		} else if userExists(username) {
 			deleteUser(username)
 		}
