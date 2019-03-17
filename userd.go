@@ -21,19 +21,19 @@ import (
 )
 
 const (
-	version               = `userd v1.13 `
-	addUserCommand        = `adduser --disabled-password %s`
-	delUserCommand        = `deluser --remove-home %s`
-	changeShellCommand    = `usermod --shell %s %s`
-	changePasswordCommand = `usermod --password '%s' %s`
-	changeHomeDirCommand  = `usermod --move-home --home %s %s`
-	changeGroupsCommand   = `usermod --groups %s %s`
-	changeCommentCommand  = `usermod --comment "%s" %s`
+	version = "v1.14"
 )
 
-var (
-	debug bool
-)
+// Commands for different flavours of Linux
+type Commands struct {
+	addUser        string
+	delUser        string
+	changeShell    string
+	changePassword string
+	changeHomeDir  string
+	changeGroups   string
+	changeComment  string
+}
 
 // User account modelled in a json file
 type User struct {
@@ -45,6 +45,18 @@ type User struct {
 	Groups   []string `json:"groups"`
 	Realms   []string `json:"realms"`
 	SSHKeys  []string `json:"ssh_keys"`
+}
+
+var (
+	debug   bool
+	Command Commands
+)
+
+func init() {
+	log.SetPrefix(fmt.Sprintf("userd %s ", version))
+	v := GetOS()
+	log.Printf("Detected operating system: %s", v)
+	Command = GetOSCommands(v)
 }
 
 // for debugging
@@ -171,7 +183,7 @@ func createUser(username string, attrs User) bool {
 // delete a user account
 func deleteUser(username string) bool {
 	log.Printf("Deleting user: %s", username)
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(delUserCommand, username))
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(Command.delUser, username))
 	if _, err := cmd.CombinedOutput(); err != nil {
 		log.Printf("Error: Can't delete user: %s: %s", username, err)
 		return false
@@ -224,7 +236,7 @@ func updateUser(username string, attrs User) bool {
 // change user's default shell
 func updateShell(username string, shell string) bool {
 	log.Printf("Updating shell for %s to %s", username, shell)
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changeShellCommand, shell, username))
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(Command.changeShell, shell, username))
 	if _, err := cmd.CombinedOutput(); err != nil {
 		log.Printf("Error: Can't update shell for %s: %s", username, err)
 		return false
@@ -236,7 +248,7 @@ func updateShell(username string, shell string) bool {
 func updatePassword(username string, password string) bool {
 	log.Printf("Updating password for %s", username)
 	info(fmt.Sprintf("New password: %s", password))
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changePasswordCommand, password, username))
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(Command.changePassword, password, username))
 	if _, err := cmd.CombinedOutput(); err != nil {
 		log.Printf("Error: Can't update password for %s: %s", username, err)
 		return false
@@ -250,7 +262,7 @@ func updateHome(username string, home string) bool {
 	if _, err := os.Stat(path.Dir(home)); err != nil {
 		exec.Command("mkdir", "-p", path.Dir(home)).Run()
 	}
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changeHomeDirCommand, home, username))
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(Command.changeHomeDir, home, username))
 	if _, err := cmd.CombinedOutput(); err != nil {
 		log.Printf("Error: Can't update home dir for %s: %s", username, err)
 		return false
@@ -261,7 +273,7 @@ func updateHome(username string, home string) bool {
 // change users gecos comment
 func updateComment(username string, comment string) bool {
 	log.Printf("Updating comment for %s to %s", username, comment)
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changeCommentCommand, comment, username))
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(Command.changeComment, comment, username))
 	if _, err := cmd.CombinedOutput(); err != nil {
 		log.Printf("Error: Can't update comment for %s: %s", username, err)
 		return false
@@ -287,7 +299,7 @@ func getUserGroups(username string) (groups []string) {
 func updateGroups(username string, groups []string) bool {
 	if len(groups) > 0 {
 		log.Printf("Updating user groups for %s: %s", username, groups)
-		cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(changeGroupsCommand, strings.Join(groups, ","), username))
+		cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(Command.changeGroups, strings.Join(groups, ","), username))
 		if output, err := cmd.CombinedOutput(); err != nil {
 			log.Printf("Error: Can't update user's groups for %s: %s %s", username, err, output)
 			return false
@@ -329,7 +341,6 @@ func inRangePattern(needle string, haystack []string) bool {
 }
 
 func main() {
-	log.SetPrefix(version)
 	var realm string
 	var repo string
 	flag.StringVar(&realm, "realm", "", "the instance's realm eg: red, green, shunter")
