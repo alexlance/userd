@@ -37,6 +37,16 @@ func GetOS() string {
 
 func GetOSCommands(flavour string) Commands {
 	switch strings.ToLower(flavour) {
+	case "centos:7":
+		return Commands{
+			addUser:        "adduser %s",
+			delUser:        "userdel --remove -f %s",
+			changeShell:    "usermod --shell %s %s",
+			changePassword: "usermod --password '%s' %s",
+			changeHomeDir:  "usermod --move-home --home %s %s",
+			changeGroups:   "usermod --groups %s %s",
+			changeComment:  "usermod --comment \"%s\" %s",
+		}
 	case "debian":
 		return Commands{
 			addUser:        "adduser --disabled-password %s",
@@ -47,8 +57,7 @@ func GetOSCommands(flavour string) Commands {
 			changeGroups:   "usermod --groups %s %s",
 			changeComment:  "usermod --comment \"%s\" %s",
 		}
-
-	case "debian:9":
+	case "debian:8":
 		return Commands{
 			addUser:        "adduser --disabled-password %s",
 			delUser:        "deluser --remove-home %s",
@@ -58,8 +67,7 @@ func GetOSCommands(flavour string) Commands {
 			changeGroups:   "usermod --groups %s %s",
 			changeComment:  "usermod --comment \"%s\" %s",
 		}
-
-	case "debian:8":
+	case "debian:9":
 		return Commands{
 			addUser:        "adduser --disabled-password %s",
 			delUser:        "deluser --remove-home %s",
@@ -79,7 +87,6 @@ func GetOSCommands(flavour string) Commands {
 			changeGroups:   "usermod --groups %s %s",
 			changeComment:  "usermod --comment \"%s\" %s",
 		}
-
 	case "ubuntu:18.04":
 		return Commands{
 			addUser:        "adduser --disabled-password %s",
@@ -90,7 +97,6 @@ func GetOSCommands(flavour string) Commands {
 			changeGroups:   "usermod --groups %s %s",
 			changeComment:  "usermod --comment \"%s\" %s",
 		}
-
 	case "ubuntu:18.10":
 		return Commands{
 			addUser:        "adduser --disabled-password %s",
@@ -111,18 +117,8 @@ func GetOSCommands(flavour string) Commands {
 			changeGroups:   "usermod --groups %s %s",
 			changeComment:  "usermod --comment \"%s\" %s",
 		}
-	case "centos:7":
-		return Commands{
-			addUser:        "adduser %s",
-			delUser:        "userdel --remove -f %s",
-			changeShell:    "usermod --shell %s %s",
-			changePassword: "usermod --password '%s' %s",
-			changeHomeDir:  "usermod --move-home --home %s %s",
-			changeGroups:   "usermod --groups %s %s",
-			changeComment:  "usermod --comment \"%s\" %s",
-		}
 	default:
-		log.Fatalf("Unable to find config for operating system: %s", flavour)
+		log.Fatalf("No config for operating system: %s", flavour)
 	}
 	return Commands{}
 }
