@@ -20,10 +20,6 @@ import (
 	"gopkg.in/src-d/go-git.v4/storage/memory"
 )
 
-const (
-	version = "v1.14"
-)
-
 // Commands for different flavours of Linux
 type Commands struct {
 	addUser        string
@@ -49,11 +45,29 @@ type User struct {
 
 var (
 	debug   bool
+	realm   string
+	repo    string
 	Command Commands
 )
 
 func init() {
-	log.SetPrefix(fmt.Sprintf("userd %s ", version))
+	log.SetPrefix("userd v1.14 ")
+	if os.Geteuid() != 0 {
+		log.Fatalf("Error: Bad user id (%d), must run as root", os.Geteuid())
+	}
+
+	flag.StringVar(&realm, "realm", "", "the instance's realm eg: red, green, shunter")
+	flag.StringVar(&repo, "repo", "", "git repo where users are stored")
+	flag.BoolVar(&debug, "debug", false, "print debugging info")
+	flag.Parse()
+
+	if realm == "" {
+		log.Fatal("Error: Empty argument --realm")
+	}
+	if repo == "" {
+		log.Fatal("Error: Empty argument --repo")
+	}
+
 	v := GetOS()
 	if v != "" {
 		log.Printf("Detected operating system: %s", v)
@@ -67,19 +81,6 @@ func init() {
 func info(msg string) {
 	if debug {
 		log.Printf("DEBUG: %s", msg)
-	}
-}
-
-// initial checks, all systems go?
-func validate(realm string, repo string) {
-	if repo == "" {
-		log.Fatal("Error: Empty argument --repo")
-	}
-	if realm == "" {
-		log.Fatal("Error: Empty argument --realm")
-	}
-	if os.Geteuid() != 0 {
-		log.Fatalf("Error: Bad user id (%d), must run as root", os.Geteuid())
 	}
 }
 
@@ -343,14 +344,6 @@ func inRangePattern(needle string, haystack []string) bool {
 }
 
 func main() {
-	var realm string
-	var repo string
-	flag.StringVar(&realm, "realm", "", "the instance's realm eg: red, green, shunter")
-	flag.StringVar(&repo, "repo", "", "git repo where users are stored")
-	flag.BoolVar(&debug, "debug", false, "print debugging info")
-	flag.Parse()
-
-	validate(realm, repo)
 	r := gitClone(repo)
 	users := gatherRepoUsers(repo, r, realm)
 
