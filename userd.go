@@ -55,7 +55,11 @@ var (
 func init() {
 	log.SetPrefix(fmt.Sprintf("userd %s ", version))
 	v := GetOS()
-	log.Printf("Detected operating system: %s", v)
+	if v != "" {
+		log.Printf("Detected operating system: %s", v)
+	} else {
+		log.Fatal("Unable to detect operating system")
+	}
 	Command = GetOSCommands(v)
 }
 
@@ -76,11 +80,6 @@ func validate(realm string, repo string) {
 	}
 	if os.Geteuid() != 0 {
 		log.Fatalf("Error: Bad user id (%d), must run as root", os.Geteuid())
-	}
-	for _, cmd := range []string{"adduser", "deluser", "usermod", "getent"} {
-		if _, err := exec.LookPath(cmd); err != nil {
-			log.Fatalf("Error: Command not found: %s", cmd)
-		}
 	}
 }
 

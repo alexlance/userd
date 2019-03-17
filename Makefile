@@ -1,21 +1,19 @@
-GITHUB_TOKEN ?= $(shell grep oauth_token ~/.config/hub | awk '{print $$2}')
-
-
-.PHONY: test
 test:
-	docker run -it -v $${GOPATH}/bin:/root/bin golang:stretch /root/bin/userd --repo https://github.com/alexlance/userd --realm test
+	cd env && (for i in *; do docker build -f $$i -t $$i . || exit 1; done)
+	cd env && (for i in *; do docker run -it -v $${GOPATH}/bin:/root/bin $${i} /root/bin/userd --repo https://github.com/alexlance/userd --realm test || exit 1; done)
 
 
-.PHONY: shell
 shell:
 	docker run -it -v $${GOPATH}/bin:/root/bin golang:stretch bash
 
 
-.PHONY: install
 install:
 	go install -ldflags "-s -w"
 
 
-.PHONY: publish
 publish: install
-	./version.sh alexlance userd $(GITHUB_TOKEN)
+	test -n "${GITHUB_TOKEN}"
+	./version.sh alexlance userd ${GITHUB_TOKEN}
+
+
+.PHONY: test shell install publish
