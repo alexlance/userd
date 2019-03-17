@@ -47,67 +47,7 @@ func GetOSCommands(flavour string) Commands {
 			changeGroups:   "usermod --groups %s %s",
 			changeComment:  "usermod --comment \"%s\" %s",
 		}
-	case "debian":
-		return Commands{
-			addUser:        "adduser --disabled-password %s",
-			delUser:        "deluser --remove-home %s",
-			changeShell:    "usermod --shell %s %s",
-			changePassword: "usermod --password '%s' %s",
-			changeHomeDir:  "usermod --move-home --home %s %s",
-			changeGroups:   "usermod --groups %s %s",
-			changeComment:  "usermod --comment \"%s\" %s",
-		}
-	case "debian:8":
-		return Commands{
-			addUser:        "adduser --disabled-password %s",
-			delUser:        "deluser --remove-home %s",
-			changeShell:    "usermod --shell %s %s",
-			changePassword: "usermod --password '%s' %s",
-			changeHomeDir:  "usermod --move-home --home %s %s",
-			changeGroups:   "usermod --groups %s %s",
-			changeComment:  "usermod --comment \"%s\" %s",
-		}
-	case "debian:9":
-		return Commands{
-			addUser:        "adduser --disabled-password %s",
-			delUser:        "deluser --remove-home %s",
-			changeShell:    "usermod --shell %s %s",
-			changePassword: "usermod --password '%s' %s",
-			changeHomeDir:  "usermod --move-home --home %s %s",
-			changeGroups:   "usermod --groups %s %s",
-			changeComment:  "usermod --comment \"%s\" %s",
-		}
-	case "ubuntu:16.04":
-		return Commands{
-			addUser:        "adduser --disabled-password %s",
-			delUser:        "deluser --remove-home %s",
-			changeShell:    "usermod --shell %s %s",
-			changePassword: "usermod --password '%s' %s",
-			changeHomeDir:  "usermod --move-home --home %s %s",
-			changeGroups:   "usermod --groups %s %s",
-			changeComment:  "usermod --comment \"%s\" %s",
-		}
-	case "ubuntu:18.04":
-		return Commands{
-			addUser:        "adduser --disabled-password %s",
-			delUser:        "deluser --remove-home %s",
-			changeShell:    "usermod --shell %s %s",
-			changePassword: "usermod --password '%s' %s",
-			changeHomeDir:  "usermod --move-home --home %s %s",
-			changeGroups:   "usermod --groups %s %s",
-			changeComment:  "usermod --comment \"%s\" %s",
-		}
-	case "ubuntu:18.10":
-		return Commands{
-			addUser:        "adduser --disabled-password %s",
-			delUser:        "deluser --remove-home %s",
-			changeShell:    "usermod --shell %s %s",
-			changePassword: "usermod --password '%s' %s",
-			changeHomeDir:  "usermod --move-home --home %s %s",
-			changeGroups:   "usermod --groups %s %s",
-			changeComment:  "usermod --comment \"%s\" %s",
-		}
-	case "ubuntu:19.04":
+	case "debian", "debian:8", "debian:9", "ubuntu:16.04", "ubuntu:18.04", "ubuntu:18.10", "ubuntu:19.04":
 		return Commands{
 			addUser:        "adduser --disabled-password %s",
 			delUser:        "deluser --remove-home %s",
