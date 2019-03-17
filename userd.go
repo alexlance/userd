@@ -69,9 +69,7 @@ func init() {
 	}
 
 	v := GetOS()
-	if v != "" {
-		log.Printf("Detected operating system: %s", v)
-	} else {
+	if v == "" {
 		log.Fatal("Unable to detect operating system")
 	}
 	Command = GetOSCommands(v)
@@ -341,10 +339,12 @@ func main() {
 	users := gatherRepoUsers(repo, r, realm)
 
 	for _, user := range users {
-		if !inRangePattern(realm, user.Realms) && userExists(user.Username) {
+		if inRangePattern(realm, user.Realms) {
+			if userExists(user.Username) || createUser(user) {
+				updateUser(user)
+			}
+		} else if userExists(user.Username) {
 			deleteUser(user.Username)
-		} else if userExists(user.Username) || createUser(user) {
-			updateUser(user)
 		}
 	}
 }
