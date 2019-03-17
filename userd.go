@@ -98,8 +98,7 @@ func gitClone(repo string) *git.Repository {
 }
 
 // gather all the users together who are meant to be in this instance's realm
-func gatherRepoUsers(repo string, r *git.Repository, realm string) map[string]User {
-	users := make(map[string]User)
+func gatherRepoUsers(repo string, r *git.Repository, realm string) (users []User) {
 	ref, _ := r.Head()
 	commit, _ := r.CommitObject(ref.Hash())
 	tree, _ := commit.Tree()
@@ -126,10 +125,14 @@ func gatherRepoUsers(repo string, r *git.Repository, realm string) map[string]Us
 				// sort them now, to make string comparisons simpler later on
 				sort.Strings(u.SSHKeys)
 				u.Groups = removeInvalidGroups(u.Groups, u.Username, realm)
-				users[u.Username] = u
+				users = append(users, u)
 			}
 		}
 		return nil
+	})
+
+	sort.Slice(users, func(i, j int) bool {
+		return users[i].Username < users[j].Username
 	})
 	return users
 }
@@ -166,15 +169,15 @@ func userExists(username string) bool {
 }
 
 // create a new user account
-func createUser(username string, attrs User) bool {
-	log.Printf("Creating user: %s", username)
+func createUser(attrs User) bool {
+	log.Printf("Creating user: %s", attrs.Username)
 	// ensure directory containing homedir exists
 	if _, err := os.Stat(path.Dir(attrs.Home)); err != nil {
 		exec.Command("mkdir", "-p", path.Dir(attrs.Home)).Run()
 	}
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(addUserCommand, username))
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(Command.addUser, attrs.Username))
 	if _, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("Error: Can't create user: %s: %s", username, err)
+		log.Printf("Error: Can't create user: %s: %s", attrs.Username, err)
 		return false
 	}
 	return true
@@ -192,33 +195,33 @@ func deleteUser(username string) bool {
 }
 
 // update the details of an existing user account
-func updateUser(username string, attrs User) bool {
-	outp, _ := exec.Command("getent", "shadow", username).CombinedOutput()
+func updateUser(attrs User) bool {
+	outp, _ := exec.Command("getent", "shadow", attrs.Username).CombinedOutput()
 
 	var currentPassword string
 	if strings.Contains(string(outp), ":") {
 		currentPassword = strings.TrimSpace(strings.Split(string(outp), ":")[1])
 	}
-	outs, _ := exec.Command("getent", "passwd", username).CombinedOutput()
+	outs, _ := exec.Command("getent", "passwd", attrs.Username).CombinedOutput()
 	currentShell := strings.TrimSpace(strings.Split(string(outs), ":")[6])
 	currentHome := strings.TrimSpace(strings.Split(string(outs), ":")[5])
 	currentComment := strings.TrimSpace(strings.Split(string(outs), ":")[4])
-	existingGroups := getUserGroups(username)
+	existingGroups := getUserGroups(attrs.Username)
 
 	if attrs.Shell != currentShell {
-		updateShell(username, attrs.Shell)
+		updateShell(attrs.Username, attrs.Shell)
 	}
 	if attrs.Password != currentPassword {
-		updatePassword(username, attrs.Password)
+		updatePassword(attrs.Username, attrs.Password)
 	}
 	if attrs.Home != currentHome {
-		updateHome(username, attrs.Home)
+		updateHome(attrs.Username, attrs.Home)
 	}
 	if attrs.Comment != currentComment {
-		updateComment(username, attrs.Comment)
+		updateComment(attrs.Username, attrs.Comment)
 	}
 	if strings.Join(existingGroups, ",") != strings.Join(attrs.Groups, ",") {
-		updateGroups(username, attrs.Groups)
+		updateGroups(attrs.Username, attrs.Groups)
 	}
 
 	keyFile := path.Join(attrs.Home, ".ssh", "authorized_keys")
@@ -228,7 +231,7 @@ func updateUser(username string, attrs User) bool {
 		sort.Strings(fileData)
 	}
 	if strings.Join(attrs.SSHKeys, ",") != strings.Join(fileData, ",") {
-		updateSSHPublicKeys(username, attrs)
+		updateSSHPublicKeys(attrs.Username, attrs)
 	}
 	return true
 }
@@ -352,17 +355,11 @@ func main() {
 	r := gitClone(repo)
 	users := gatherRepoUsers(repo, r, realm)
 
-	for username, attrs := range users {
-		if inRangePattern(realm, attrs.Realms) {
-			if !userExists(username) {
-				if createUser(username, attrs) {
-					updateUser(username, attrs)
-				}
-			} else {
-				updateUser(username, attrs)
-			}
-		} else if userExists(username) {
-			deleteUser(username)
+	for _, user := range users {
+		if !inRangePattern(realm, user.Realms) && userExists(user.Username) {
+			deleteUser(user.Username)
+		} else if userExists(user.Username) || createUser(user) {
+			updateUser(user)
 		}
 	}
 }
