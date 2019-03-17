@@ -6,34 +6,33 @@ Debian user management via git repository
 -----------------------------------------
 
 
-# Usage:
+### Usage
 
 Run `userd` periodically on each of your servers. Eg:
 
     userd --realm development --repo https://github.com/someone/users
 
 
-# Git repository:
+### Git repository
 
 When the application starts, `userd` clones a git repository into memory.
 
 The git repository contains a centralized list of users. It then checks that
 list and adds or removes user accounts from the server as required.
 
-    *The git repository should be locked down to prevent unauthorized write access*
+    The git repository should be locked down to prevent unauthorized write access
 
 The git repo can contain ssh public keys for each user, `userd` will keep each
-user's `~/.ssh/authorized_keys` up to date with those keys. Additionally the
-user's groups and other account details may be administrated from the git repo
-as well.
+user's `~/.ssh/authorized_keys` up to date with those keys. The user's groups
+and other account details may be administrated from the git repo as well.
 
 Since all user administration is performed by changing a git repo, there is a
-solid audit trail behind every access that is granted for every user, for every
-server. We make use of Pull Requests so that a user may kick-start their own
-request for access.
+solid audit trail behind every server access that is granted for every user. We
+make use of Pull Requests so that a user may kick-start their own request for
+access.
 
 
-# Realms:
+### Realms
 
 Each server belongs to a realm. The realm name is arbitrary, and it is up to you
 to decide what sort of name to use.
@@ -45,12 +44,12 @@ You might decide to define your realms quite broadly like: green, orange, red.
 Or take a fine-grained approach by using eg hostnames, or IP addresses.
 
 The level of granularity is up to you. We use AWS Instance Profile names across
-hundreds of servers for fine-grained access. This works well when a particular
-application is spread across multiple servers, that all have the same Instance
-Profile name.
+hundreds of servers for medium-fine-grained access. This works well when a
+particular application is spread across multiple servers, that all have the
+same Instance Profile name.
 
 
-# User definition format
+### User definition format
 
 The git repository that contains all the user accounts, should comprise of
 multiple JSON files. One JSON file per user. Each JSON file should have the
