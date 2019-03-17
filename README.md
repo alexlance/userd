@@ -6,8 +6,8 @@ Debian/Ubuntu/CentOS user management
 ------------------------------------
 
     Userd gathers user account information from a specified git repository,
-    then administrates those Linux accounts and their ssh access across various
-    servers.
+    then administrates the Linux accounts and their ssh access across a particular
+    server.
 
 
 ### Installation
