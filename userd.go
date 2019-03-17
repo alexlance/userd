@@ -51,7 +51,7 @@ var (
 )
 
 func init() {
-	log.SetPrefix("userd v1.14 ")
+	log.SetPrefix("userd v1.15 ")
 	if os.Geteuid() != 0 {
 		log.Fatalf("Error: Bad user id (%d), must run as root", os.Geteuid())
 	}
