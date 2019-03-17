@@ -171,11 +171,7 @@ func userExists(username string) bool {
 // create a new user account
 func createUser(attrs User) bool {
 	log.Printf("Creating user: %s", attrs.Username)
-	// ensure directory containing homedir exists
-	if _, err := os.Stat(path.Dir(attrs.Home)); err != nil {
-		exec.Command("mkdir", "-p", path.Dir(attrs.Home)).Run()
-	}
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(Command.addUser, attrs.Username))
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(Command.addUser, attrs.Home, attrs.Username))
 	if _, err := cmd.CombinedOutput(); err != nil {
 		log.Printf("Error: Can't create user: %s: %s", attrs.Username, err)
 		return false
@@ -262,9 +258,6 @@ func updatePassword(username string, password string) bool {
 // change users home directory
 func updateHome(username string, home string) bool {
 	log.Printf("Updating home dir for %s to %s", username, home)
-	if _, err := os.Stat(path.Dir(home)); err != nil {
-		exec.Command("mkdir", "-p", path.Dir(home)).Run()
-	}
 	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(Command.changeHomeDir, home, username))
 	if _, err := cmd.CombinedOutput(); err != nil {
 		log.Printf("Error: Can't update home dir for %s: %s", username, err)

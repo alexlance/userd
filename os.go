@@ -39,23 +39,23 @@ func GetOSCommands(flavour string) Commands {
 	switch strings.ToLower(flavour) {
 	case "centos:7":
 		return Commands{
-			addUser:        "adduser %s",
-			delUser:        "userdel --remove -f %s",
-			changeShell:    "usermod --shell %s %s",
-			changePassword: "usermod --password '%s' %s",
-			changeHomeDir:  "usermod --move-home --home %s %s",
-			changeGroups:   "usermod --groups %s %s",
-			changeComment:  "usermod --comment \"%s\" %s",
+			addUser:        `adduser -m --home-dir "%s" %s`,
+			delUser:        `userdel --remove -f %s`,
+			changeShell:    `usermod --shell %s %s`,
+			changePassword: `usermod --password '%s' %s`,
+			changeHomeDir:  `usermod --move-home --home %s %s`,
+			changeGroups:   `usermod --groups %s %s`,
+			changeComment:  `usermod --comment "%s" %s`,
 		}
 	case "debian", "debian:8", "debian:9", "ubuntu:16.04", "ubuntu:18.04", "ubuntu:18.10", "ubuntu:19.04":
 		return Commands{
-			addUser:        "adduser --disabled-password %s",
-			delUser:        "deluser --remove-home %s",
-			changeShell:    "usermod --shell %s %s",
-			changePassword: "usermod --password '%s' %s",
-			changeHomeDir:  "usermod --move-home --home %s %s",
-			changeGroups:   "usermod --groups %s %s",
-			changeComment:  "usermod --comment \"%s\" %s",
+			addUser:        `adduser --home "%s" --disabled-password %s`,
+			delUser:        `deluser --remove-home %s`,
+			changeShell:    `usermod --shell %s %s`,
+			changePassword: `usermod --password '%s' %s`,
+			changeHomeDir:  `usermod --move-home --home %s %s`,
+			changeGroups:   `usermod --groups %s %s`,
+			changeComment:  `usermod --comment "%s" %s`,
 		}
 	default:
 		log.Fatalf("No config for operating system: %s", flavour)
