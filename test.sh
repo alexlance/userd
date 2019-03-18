@@ -13,10 +13,12 @@ function check_users() {
 }
 
 function change_value() {
+  pushd test
   cat ${1} | jq ". + ${2}" > t
   mv t ${1}
   git add ${1}
   git commit -m "changed ${1} to ${2}"
+  popd
 }
 
 echo "######################################"
