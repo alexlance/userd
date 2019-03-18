@@ -13,4 +13,4 @@ git tag ${version}
 git push origin master
 release=$(${c} -XPOST ${gh}/releases -d '{ "tag_name": "'${version}'", "target_commitish": "master", "name": "'${version}'", "body": "'${version}'", "draft": false, "prerelease": false }')
 url=$(echo "${release}" | jq -r .upload_url | cut -f1 -d'{')
-$c -XPOST ${url}?name=${repo} --data-binary @${GOPATH}/bin/userd -H "Content-Type: application/binary"
+$c -XPOST ${url}?name=${repo} --data-binary @./userd -H "Content-Type: application/binary"
