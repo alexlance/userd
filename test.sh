@@ -19,6 +19,9 @@ function change_value() {
   git commit -m "changed ${1} to ${2}"
 }
 
+echo "######################################"
+cat /etc/os-release
+
 # get git setup out of the way
 git config --global user.email "you@example.com"
 git config --global user.name "Your Name"
@@ -71,13 +74,14 @@ test "$($c 2>&1 | tee /dev/stderr | wc -l)" -eq 1
 grep andy /etc/passwd | grep "King of all Ops"
 
 
-change_value test3.json '{ groups : ["sudo","cdrom"]}'
+change_value test3.json '{ groups : ["audio","cdrom", "doesntexist"]}'
 c="/root/bin/userd --repo ./ --realm test"
 $c 2>&1 | tee /dev/stderr | grep "Updating user groups for andy"
 check_users "andy"
 test "$($c 2>&1 | tee /dev/stderr | wc -l)" -eq 1
-groups andy | grep sudo
+groups andy | grep audio
 groups andy | grep cdrom
+groups andy | grep doesntexist && exit 1
 
 
 change_value test3.json '{ password : "this my password"}'
