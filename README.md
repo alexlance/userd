@@ -5,9 +5,9 @@ userd v1.16
 Debian/Ubuntu/CentOS user management
 ------------------------------------
 
-    Userd gathers user account information from a specified git repository,
-    then administrates the Linux accounts and their ssh access across a particular
-    server.
+    Userd gathers user account information from the specified git repository,
+    then administrates the Linux accounts and their ssh access across particular
+    servers.
 
 
 ### Installation
@@ -34,24 +34,24 @@ If the git repo contains ssh public keys, `userd` will keep each user's
 (and other account details) will be updated as well.
 
 Since all user administration is performed by git repository commits, there is
-a solid audit trail behind every access that is granted to every user. Pull
-Requests may be created by unauthorized users to kick-start requests for
-access.
+a solid audit trail behind every access that is granted to every user. A Pull
+Request may be created by unauthorized users to kick-start a grant for access.
 
 
 ### Realms
 
-Each server belongs to a realm. The realm name is arbitrary and is used by
-`userd` to decide whether a user account should or shouldn't exist on a server
-(ie is this user, in that realm?).
+Realms are used to define access perimeters. The actual realm names are
+arbitrary and defined by you.
 
-You might decide to define your realms quite broadly: green, orange, red.
-Or take a fine-grained approach: using each server's hostname or IP address.
+Each server belongs to a realm. The realm name is used by `userd` to decide
+whether a user account should or shouldn't exist on a server (ie is _this_ user
+in _that_ realm?).
 
-The realm names are up to you: You can use them to define a level of conceptual
-abstraction.
+You might decide to define your realms quite broadly eg: green, orange, red.
+Or take a fine-grained approach eg: using each server's hostname or IP address
+as a separate realm.
 
-For example, we use *AWS Instance Profile names* across our servers. This works
+For example, we use *AWS Instance Profile names* as our realms. This works
 because our particular applications are spread across multiple servers that may
 all have the same Instance Profile name.
 
