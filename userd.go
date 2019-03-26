@@ -32,6 +32,7 @@ type User struct {
 	SSHKeys  []string `json:"ssh_keys"`
 }
 
+// vars that are global-ish
 var (
 	debug  bool
 	realm  string
@@ -39,6 +40,7 @@ var (
 	distro distroCommands
 )
 
+// grab the command line arguments and figure out which OS we're on
 func init() {
 	log.SetPrefix("userd v1.18 ")
 	if os.Geteuid() != 0 {
@@ -57,11 +59,11 @@ func init() {
 		log.Fatal("Error: Empty argument --repo")
 	}
 
-	v := GetOS()
+	v := getOS()
 	if v == "" {
 		log.Fatal("Unable to detect operating system")
 	}
-	distro = GetOSCommands(v)
+	distro = getOSCommands(v)
 }
 
 // for debugging
