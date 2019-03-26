@@ -18,6 +18,7 @@ type distroCommands struct {
 	changeComment  func(string, string) []string
 }
 
+// get the short string version of the operating system eg debian:9
 func GetOS() string {
 	b, err := ioutil.ReadFile("/etc/os-release")
 	if err != nil {
@@ -46,6 +47,7 @@ func GetOS() string {
 	}
 }
 
+// return an operating-system specific user management command to run
 func GetOSCommands(flavour string) distroCommands {
 	switch strings.ToLower(flavour) {
 	case "centos:7":
