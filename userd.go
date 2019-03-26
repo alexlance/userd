@@ -20,17 +20,6 @@ import (
 	"gopkg.in/src-d/go-git.v4/storage/memory"
 )
 
-// Commands for different flavours of Linux
-type Commands struct {
-	addUser        string
-	delUser        string
-	changeShell    string
-	changePassword string
-	changeHomeDir  string
-	changeGroups   string
-	changeComment  string
-}
-
 // User account modelled in a json file
 type User struct {
 	Username string   `json:"username"`
@@ -44,19 +33,19 @@ type User struct {
 }
 
 var (
-	debug   bool
-	realm   string
-	repo    string
-	Command Commands
+	debug  bool
+	realm  string
+	repo   string
+	distro distroCommands
 )
 
 func init() {
-	log.SetPrefix("userd v1.17 ")
+	log.SetPrefix("userd v1.18 ")
 	if os.Geteuid() != 0 {
 		log.Fatalf("Error: Bad user id (%d), must run as root", os.Geteuid())
 	}
 
-	flag.StringVar(&realm, "realm", "", "the instance's realm eg: red, green, shunter")
+	flag.StringVar(&realm, "realm", "", "the instance's realm eg: dev, stage, prod")
 	flag.StringVar(&repo, "repo", "", "git repo where users are stored")
 	flag.BoolVar(&debug, "debug", false, "print debugging info")
 	flag.Parse()
@@ -72,7 +61,7 @@ func init() {
 	if v == "" {
 		log.Fatal("Unable to detect operating system")
 	}
-	Command = GetOSCommands(v)
+	distro = GetOSCommands(v)
 }
 
 // for debugging
@@ -169,9 +158,10 @@ func userExists(username string) bool {
 // create a new user account
 func createUser(attrs User) bool {
 	log.Printf("Creating user: %s", attrs.Username)
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(Command.addUser, attrs.Home, attrs.Username))
-	if _, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("Error: Can't create user: %s: %s", attrs.Username, err)
+	args := distro.addUser(attrs.Username, attrs.Home)
+	cmd := exec.Command(args[0], args[1:]...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("Error: Can't create user: %s: %s %s", attrs.Username, err, out)
 		return false
 	}
 	return true
@@ -180,9 +170,10 @@ func createUser(attrs User) bool {
 // delete a user account
 func deleteUser(username string) bool {
 	log.Printf("Deleting user: %s", username)
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(Command.delUser, username))
-	if _, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("Error: Can't delete user: %s: %s", username, err)
+	args := distro.delUser(username)
+	cmd := exec.Command(args[0], args[1:]...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("Error: Can't delete user: %s: %s %s", username, err, out)
 		return false
 	}
 	return true
@@ -233,9 +224,10 @@ func updateUser(attrs User) bool {
 // change user's default shell
 func updateShell(username string, shell string) bool {
 	log.Printf("Updating shell for %s to %s", username, shell)
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(Command.changeShell, shell, username))
-	if _, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("Error: Can't update shell for %s: %s", username, err)
+	args := distro.changeShell(username, shell)
+	cmd := exec.Command(args[0], args[1:]...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("Error: Can't update shell for %s: %s %s", username, err, out)
 		return false
 	}
 	return true
@@ -245,9 +237,10 @@ func updateShell(username string, shell string) bool {
 func updatePassword(username string, password string) bool {
 	log.Printf("Updating password for %s", username)
 	info(fmt.Sprintf("New password: %s", password))
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(Command.changePassword, password, username))
-	if _, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("Error: Can't update password for %s: %s", username, err)
+	args := distro.changePassword(username, password)
+	cmd := exec.Command(args[0], args[1:]...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("Error: Can't update password for %s: %s %s", username, err, out)
 		return false
 	}
 	return true
@@ -256,9 +249,10 @@ func updatePassword(username string, password string) bool {
 // change users home directory
 func updateHome(username string, home string) bool {
 	log.Printf("Updating home dir for %s to %s", username, home)
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(Command.changeHomeDir, home, username))
-	if _, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("Error: Can't update home dir for %s: %s", username, err)
+	args := distro.changeHomeDir(username, home)
+	cmd := exec.Command(args[0], args[1:]...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("Error: Can't update home dir for %s: %s %s", username, err, out)
 		return false
 	}
 	return true
@@ -267,9 +261,10 @@ func updateHome(username string, home string) bool {
 // change users gecos comment
 func updateComment(username string, comment string) bool {
 	log.Printf("Updating comment for %s to %s", username, comment)
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(Command.changeComment, comment, username))
-	if _, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("Error: Can't update comment for %s: %s", username, err)
+	args := distro.changeComment(username, comment)
+	cmd := exec.Command(args[0], args[1:]...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("Error: Can't update comment for %s: %s %s", username, err, out)
 		return false
 	}
 	return true
@@ -293,9 +288,10 @@ func getUserGroups(username string) (groups []string) {
 func updateGroups(username string, groups []string) bool {
 	if len(groups) > 0 {
 		log.Printf("Updating user groups for %s: %s", username, groups)
-		cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf(Command.changeGroups, strings.Join(groups, ","), username))
-		if output, err := cmd.CombinedOutput(); err != nil {
-			log.Printf("Error: Can't update user's groups for %s: %s %s", username, err, output)
+		args := distro.changeGroups(username, strings.Join(groups, ","))
+		cmd := exec.Command(args[0], args[1:]...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			log.Printf("Error: Can't update user's groups for %s: %s %s", username, err, out)
 			return false
 		}
 	}

@@ -7,6 +7,17 @@ import (
 	"strings"
 )
 
+// distroCommands for different flavours of Linux
+type distroCommands struct {
+	addUser        func(string, string) []string
+	delUser        func(string) []string
+	changeShell    func(string, string) []string
+	changePassword func(string, string) []string
+	changeHomeDir  func(string, string) []string
+	changeGroups   func(string, string) []string
+	changeComment  func(string, string) []string
+}
+
 func GetOS() string {
 	b, err := ioutil.ReadFile("/etc/os-release")
 	if err != nil {
@@ -35,30 +46,58 @@ func GetOS() string {
 	}
 }
 
-func GetOSCommands(flavour string) Commands {
+func GetOSCommands(flavour string) distroCommands {
 	switch strings.ToLower(flavour) {
 	case "centos:7":
-		return Commands{
-			addUser:        `adduser -m --home-dir "%s" %s`,
-			delUser:        `userdel --remove -f %s`,
-			changeShell:    `usermod --shell %s %s`,
-			changePassword: `usermod --password '%s' %s`,
-			changeHomeDir:  `usermod --move-home --home %s %s`,
-			changeGroups:   `usermod --groups %s %s`,
-			changeComment:  `usermod --comment "%s" %s`,
+		return distroCommands{
+			addUser: func(username string, home string) []string {
+				return []string{"adduser", "-m", "--home-dir", home, username}
+			},
+			delUser: func(username string) []string {
+				return []string{"userdel", "--remove", "-f", username}
+			},
+			changeShell: func(username string, shell string) []string {
+				return []string{"usermod", "--shell", shell, username}
+			},
+			changePassword: func(username string, password string) []string {
+				return []string{"usermod", "--password", password, username}
+			},
+			changeHomeDir: func(username string, home string) []string {
+				return []string{"usermod", "--move-home", "--home", home, username}
+			},
+			changeGroups: func(username string, groups string) []string {
+				return []string{"usermod", "--groups", groups, username}
+			},
+			changeComment: func(username string, comment string) []string {
+				return []string{"usermod", "--comment", comment, username}
+			},
 		}
 	case "debian", "debian:8", "debian:9", "ubuntu:16.04", "ubuntu:18.04", "ubuntu:18.10", "ubuntu:19.04":
-		return Commands{
-			addUser:        `adduser --home "%s" --disabled-password %s`,
-			delUser:        `deluser --remove-home %s`,
-			changeShell:    `usermod --shell %s %s`,
-			changePassword: `usermod --password '%s' %s`,
-			changeHomeDir:  `usermod --move-home --home %s %s`,
-			changeGroups:   `usermod --groups %s %s`,
-			changeComment:  `usermod --comment "%s" %s`,
+		return distroCommands{
+			addUser: func(username string, home string) []string {
+				return []string{"adduser", "--home", home, "--disabled-password", username}
+			},
+			delUser: func(username string) []string {
+				return []string{"deluser", "--remove-home", username}
+			},
+			changeShell: func(username string, shell string) []string {
+				return []string{"usermod", "--shell", shell, username}
+			},
+			changePassword: func(username string, password string) []string {
+				return []string{"usermod", "--password", password, username}
+			},
+			changeHomeDir: func(username string, home string) []string {
+				return []string{"usermod", "--move-home", "--home", home, username}
+			},
+			changeGroups: func(username string, groups string) []string {
+				return []string{"usermod", "--groups", groups, username}
+			},
+			changeComment: func(username string, comment string) []string {
+				return []string{"usermod", "--comment", comment, username}
+			},
 		}
 	default:
 		log.Fatalf("No config for operating system: %s", flavour)
 	}
-	return Commands{}
+	return distroCommands{}
 }
