@@ -3,6 +3,19 @@
 set -euxo pipefail
 
 
+function run_test() {
+  local name="${1}"
+  local c="${2}"
+  set +x
+  echo "######################################################################### ${name}"
+  set -x
+  if ${c} 2>&1 | tee /dev/stderr | grep Error; then
+    echo "Error detected"
+    exit 1
+  fi
+  test "$($c 2>&1 | tee /dev/stderr | wc -l)" -eq 1
+}
+
 function remove_users() {
   echo "Removing users ######################################"
   local c="/tmp/userd/userd --repo ./ --realm deleteall"
@@ -39,157 +52,124 @@ git clone https://github.com/alexlance/userd ./data
 cd data
 
 
-echo "1 ######################################"
-c="/tmp/userd/userd --repo https://github.com/alexlance/userd --realm test"
-$c
+run_test "1" "/tmp/userd/userd --repo https://github.com/alexlance/userd --realm test"
 check_users "alla andy"
-test "$($c 2>&1 | tee /dev/stderr | wc -l)" -eq 1
 
-
-echo "2 ######################################"
-c="/tmp/userd/userd --repo ./ --realm test"
-$c
+run_test "2" "/tmp/userd/userd --repo ./ --realm test"
 check_users "alla andy"
-test "$($c 2>&1 | tee /dev/stderr | wc -l)" -eq 1
 
-
-echo "3 ######################################"
-c="/tmp/userd/userd --repo ./ --realm dev"
-$c
+run_test "3" "/tmp/userd/userd --repo ./ --realm dev"
 check_users "alla andy steve"
-test "$($c 2>&1 | tee /dev/stderr | wc -l)" -eq 1
 
-
-echo "4 ######################################"
-c="/tmp/userd/userd --repo ./ --realm doesntexist"
-$c
+run_test "4" "/tmp/userd/userd --repo ./ --realm doesntexist"
 check_users "alla andy"
-test "$($c 2>&1 | tee /dev/stderr | wc -l)" -eq 1
 
-
-echo "5 ######################################"
 change_value test.json '{ realms : []}'
-c="/tmp/userd/userd --repo ./ --realm dev"
-$c
+run_test "5" "/tmp/userd/userd --repo ./ --realm dev"
 check_users "andy steve"
-test "$($c 2>&1 | tee /dev/stderr | wc -l)" -eq 1
 
-
-echo "6 ######################################"
 change_value test.json '{ realms : ["dev"]}'
-c="/tmp/userd/userd --repo ./ --realm dev"
-$c
+run_test "6" "/tmp/userd/userd --repo ./ --realm dev"
 check_users "andy steve alla"
-test "$($c 2>&1 | tee /dev/stderr | wc -l)" -eq 1
 
-
-echo "7 ######################################"
-c="/tmp/userd/userd --repo ./ --realm test"
-$c
+run_test "7" "/tmp/userd/userd --repo ./ --realm test"
 check_users "andy"
-test "$($c 2>&1 | tee /dev/stderr | wc -l)" -eq 1
 
-
-echo "8 ######################################"
 change_value test3.json '{ comment : "King of all Ops"}'
-c="/tmp/userd/userd --repo ./ --realm test"
-$c 2>&1 | tee /dev/stderr | grep "Updating comment for andy"
+run_test "8" "/tmp/userd/userd --repo ./ --realm test" 2>&1 | grep "Updating comment for andy"
 check_users "andy"
-test "$($c 2>&1 | tee /dev/stderr | wc -l)" -eq 1
 grep andy /etc/passwd | grep "King of all Ops"
 
-
-echo "9 ######################################"
 change_value test3.json '{ groups : ["audio","cdrom", "doesntexist"]}'
-c="/tmp/userd/userd --repo ./ --realm test"
-$c 2>&1 | tee /dev/stderr | grep "Updating user groups for andy"
+run_test "9" "/tmp/userd/userd --repo ./ --realm test" 2>&1 | grep "Updating user groups for andy"
 check_users "andy"
-test "$($c 2>&1 | tee /dev/stderr | wc -l)" -eq 1
 groups andy | grep audio
 groups andy | grep cdrom
 groups andy | grep doesntexist && exit 1
 
-
-echo "10######################################"
 change_value test3.json '{ password : "this my password"}'
 change_value test3.json '{ shell : "/bin/sh"}'
-c="/tmp/userd/userd --repo ./ --realm test"
-output=$($c 2>&1 | tee /dev/stderr)
+output=$(run_test "10" "/tmp/userd/userd --repo ./ --realm test" 2>&1)
 grep "Updating password for andy" <<< $output
 grep "Updating shell for andy" <<< $output
 check_users "andy"
-test "$($c 2>&1 | tee /dev/stderr | wc -l)" -eq 1
 grep andy /etc/shadow | grep "this my password"
 grep andy /etc/passwd | grep "/bin/sh"
 
-
-echo "11######################################"
 change_value test3.json '{ ssh_keys : ["this my key1", "this is the second key", "third key"]}'
-c="/tmp/userd/userd --repo ./ --realm test"
-$c 2>&1 | tee /dev/stderr | grep "Updating ssh keys for andy"
+run_test "11" "/tmp/userd/userd --repo ./ --realm test" 2>&1 | grep "Updating ssh keys for andy"
 check_users "andy"
 test "$(cat /home/andy/.ssh/authorized_keys | wc -l)" -eq 2 # no newline in file
 cat /home/andy/.ssh/authorized_keys
 grep "this my key1" /home/andy/.ssh/authorized_keys
 grep "this is the second key" /home/andy/.ssh/authorized_keys
 grep "third key" /home/andy/.ssh/authorized_keys
-test "$($c 2>&1 | tee /dev/stderr | wc -l)" -eq 1
 
-
-echo "12######################################"
 change_value test3.json '{ realms : []}'
 change_value test.json '{ groups : ["sudo:taiii"]}'
+run_test "12" "echo hai mark"
 remove_users
 
-
-echo "13######################################"
 change_value test.json '{ realms : ["devil"]}'
 change_value test.json '{ groups : ["audio:heaven"]}'
-c="/tmp/userd/userd --repo ./ --realm devil"
-$c
+run_test "13" "/tmp/userd/userd --repo ./ --realm devil"
 check_users "alla"
 groups alla | grep audio && exit 1
-
 remove_users
 
-
-echo "14######################################"
 change_value test.json '{ groups : ["audio:devil"]}'
-c="/tmp/userd/userd --repo ./ --realm devil"
-$c
+run_test "14" "/tmp/userd/userd --repo ./ --realm devil"
 check_users "alla"
 groups alla | grep audio
-
 remove_users
 
-
-echo "15######################################"
 change_value test.json '{ groups : ["audio:devi*"]}'
-c="/tmp/userd/userd --repo ./ --realm devil"
-$c
+run_test "15" "/tmp/userd/userd --repo ./ --realm devil"
 check_users "alla"
 groups alla | grep audio
-
 remove_users
 
 
-echo "16######################################"
 change_value test.json '{ groups : ["nonexistentgroup:devi*"]}'
-c="/tmp/userd/userd --repo ./ --realm devil"
-$c
+run_test "16" "/tmp/userd/userd --repo ./ --realm devil"
 check_users "alla"
 groups alla | grep nonexistentgroup && exit 1
-
 remove_users
 
 
-echo "17######################################"
 groupadd nonexistentgroup
-c="/tmp/userd/userd --repo ./ --realm devil"
-$c
+run_test "17" "/tmp/userd/userd --repo ./ --realm devil"
 check_users "alla"
 groups alla | grep nonexistentgroup # should exist now
+remove_users
+
+change_value test.json '{ groups : ["audio"]}'
+run_test "18" "/tmp/userd/userd --repo ./ --realm devil"
+check_users "alla"
+groups alla | grep audio
+
+
+change_value test.json '{ groups : [""]}'
+run_test "19" "/tmp/userd/userd --repo ./ --realm devil"
+check_users "alla"
+test "$(groups alla)" == "alla : alla"
+
+
+change_value test.json '{ groups : ["audio"]}'
+run_test "20" "/tmp/userd/userd --repo ./ --realm devil"
+check_users "alla"
+groups alla | grep audio
+
+
+change_value test.json '{ groups : []}'
+run_test "21" "/tmp/userd/userd --repo ./ --realm devil"
+check_users "alla"
+test "$(groups alla)" == "alla : alla"
+
+change_value test.json '{ comment : "how do you:like them apples"}'
+run_test "22" "/tmp/userd/userd --repo ./ --realm devil"
+check_users "alla"
+getent passwd alla
 
 
 echo "DONE"
-#exit 1
