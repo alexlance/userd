@@ -221,8 +221,8 @@ func updateUser(u User) bool {
 		if u.Home != strings.TrimSpace(details[5]) {
 			updateHome(u.Username, u.Home)
 		}
-		if to_alphnum(u.Comment) != strings.TrimSpace(details[4]) {
-			updateComment(u.Username, to_alphnum(u.Comment))
+		if toAlphNum(u.Comment) != strings.TrimSpace(details[4]) {
+			updateComment(u.Username, toAlphNum(u.Comment))
 		}
 	} else {
 		log.Printf("Error: Can't get user details for user: %s", u.Username)
@@ -291,7 +291,7 @@ func updateComment(username string, comment string) bool {
 }
 
 // strip out characters that are problematic with passwd files
-func to_alphnum(input string) string {
+func toAlphNum(input string) string {
 	reg, err := regexp.Compile("[^a-zA-Z0-9 ]+")
 	if err != nil {
 		log.Fatal(err)
