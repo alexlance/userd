@@ -1,13 +1,14 @@
-userd v1.18
+userd v1.19
 ===========
 
 
 Debian/Ubuntu/CentOS user management
 ------------------------------------
 
-    Userd gathers user account information from the specified git repository,
-    then administrates the Linux accounts and their ssh access across particular
-    servers.
+    The simple alternative to user account management on Linux.
+
+    Userd gathers user account definitions from a git repository, then
+    administrates Linux user accounts and ssh access.
 
 
 ### Installation
