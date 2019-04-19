@@ -74,7 +74,8 @@ func info(msg string) {
 }
 
 // clone a git repo full of json users into memory
-func gitClone(repo string) *git.Repository {
+func gitClone(repo string) *object.FileIter {
+	log.Print("git clone ", repo)
 	r, err := git.Clone(memory.NewStorage(), nil, &git.CloneOptions{
 		URL:   repo,
 		Depth: 1,
@@ -82,17 +83,24 @@ func gitClone(repo string) *git.Repository {
 	if err != nil {
 		log.Fatal("git clone ", repo, ": Error: ", err)
 	}
-	log.Print("git clone ", repo)
-	return r
+	ref, err := r.Head()
+	if err != nil {
+		log.Fatal("git clone ", repo, " Can't get head: Error: ", err)
+	}
+	commit, err := r.CommitObject(ref.Hash())
+	if err != nil {
+		log.Fatal("git clone ", repo, " Can't get commit: Error: ", err)
+	}
+	tree, err := commit.Tree()
+	if err != nil {
+		log.Fatal("git clone ", repo, " Can't get files: Error: ", err)
+	}
+	return tree.Files()
 }
 
 // gather all the users together who are meant to be in this instance's realm
-func gatherRepoUsers(repo string, r *git.Repository, realm string) (users []User) {
-	ref, _ := r.Head()
-	commit, _ := r.CommitObject(ref.Hash())
-	tree, _ := commit.Tree()
-
-	tree.Files().ForEach(func(f *object.File) error {
+func gatherUsers(files *object.FileIter) (users []User) {
+	files.ForEach(func(f *object.File) error {
 		var u User
 		if len(f.Name) > 5 && strings.ToLower(f.Name[len(f.Name)-5:]) == ".json" {
 			content, _ := f.Contents()
@@ -104,16 +112,17 @@ func gatherRepoUsers(repo string, r *git.Repository, realm string) (users []User
 				log.Printf("%s: Error: Missing 'username' in JSON: %s", f.Name, compact)
 			} else {
 				if u.Home == "" {
-					u.Home = "/home/" + u.Username
+					u.Home = path.Clean("/home/" + u.Username)
 				} else {
 					u.Home = path.Clean(u.Home)
 				}
 				if u.Shell == "" {
 					u.Shell = "/bin/bash"
+				} else {
+					u.Shell = path.Clean(u.Shell)
 				}
 				// sort them now, to make string comparisons simpler later on
 				sort.Strings(u.SSHKeys)
-				u.Groups = removeInvalidGroups(u.Groups, u.Username, realm)
 				users = append(users, u)
 			}
 		}
@@ -127,26 +136,38 @@ func gatherRepoUsers(repo string, r *git.Repository, realm string) (users []User
 }
 
 // check the groups that are available on this system
-func removeInvalidGroups(groups []string, username string, realm string) (goodGroups []string) {
-	for _, g := range groups {
-		// per realm groups, eg: sudo:realm1:realm2:realm3
+func removeInvalidGroups(u User, realm string) (goodGroups []string) {
+	// the groups field can contain realm-specific group membership rules, eg:
+	//
+	// "groups" : [
+	//   "audio",               # user belongs in the audio group for all of their realms
+	//   "visual:realm1",       # user belongs in the video group, but only in realm1
+	//   "spidey:realm1:realm2" # user belongs in the spidey group, but only in realm1 and realm2
+	//  ]
+	for _, g := range u.Groups {
+
+		// if group:realm format
 		if gr := strings.Split(g, ":"); len(gr) > 1 {
-			g = gr[0]
 			if !inRangePattern(realm, gr[1:]) {
 				continue
 			}
+			g = gr[0]
 		}
-		// ignore user's primary group, shouldn't mess with that
-		if g == username {
+
+		// don't include user's primary group
+		if g == u.Username {
 			continue
 		}
+
 		// only include groups that exist on this instance
-		if _, err := user.LookupGroup(g); err == nil {
-			goodGroups = append(goodGroups, g)
+		if _, err := user.LookupGroup(g); err != nil {
+			continue
 		}
+
+		goodGroups = append(goodGroups, g)
 	}
 	sort.Strings(goodGroups)
-	return goodGroups
+	return
 }
 
 // check if a user account exists on this system
@@ -326,16 +347,17 @@ func inRangePattern(needle string, haystack []string) bool {
 }
 
 func main() {
-	r := gitClone(repo)
-	users := gatherRepoUsers(repo, r, realm)
+	files := gitClone(repo)
+	users := gatherUsers(files)
 
-	for _, user := range users {
-		if inRangePattern(realm, user.Realms) {
-			if userExists(user.Username) || createUser(user) {
-				updateUser(user)
+	for _, u := range users {
+		if inRangePattern(realm, u.Realms) {
+			if userExists(u.Username) || createUser(u) {
+				u.Groups = removeInvalidGroups(u, realm)
+				updateUser(u)
 			}
-		} else if userExists(user.Username) {
-			deleteUser(user.Username)
+		} else if userExists(u.Username) {
+			deleteUser(u.Username)
 		}
 	}
 }
