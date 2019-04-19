@@ -179,11 +179,11 @@ func userExists(username string) bool {
 }
 
 // create a new user account
-func createUser(attrs User) bool {
-	log.Printf("Creating user: %s", attrs.Username)
-	args := distro.addUser(attrs.Username, attrs.Home)
+func createUser(u User) bool {
+	log.Printf("Creating user: %s", u.Username)
+	args := distro.addUser(u.Username, u.Home)
 	if out, err := exec.Command(args[0], args[1:]...).CombinedOutput(); err != nil {
-		log.Printf("Error: Can't create user: %s: %s %s", attrs.Username, err, out)
+		log.Printf("Error: Can't create user: %s: %s %s", u.Username, err, out)
 		return false
 	}
 	return true
@@ -201,43 +201,43 @@ func deleteUser(username string) bool {
 }
 
 // update the details of an existing user account
-func updateUser(attrs User) bool {
-	outp, _ := exec.Command("getent", "shadow", attrs.Username).CombinedOutput()
+func updateUser(u User) bool {
+	outp, _ := exec.Command("getent", "shadow", u.Username).CombinedOutput()
 
 	var currentPassword string
 	if strings.Contains(string(outp), ":") {
 		currentPassword = strings.TrimSpace(strings.Split(string(outp), ":")[1])
 	}
-	outs, _ := exec.Command("getent", "passwd", attrs.Username).CombinedOutput()
+	outs, _ := exec.Command("getent", "passwd", u.Username).CombinedOutput()
 	currentShell := strings.TrimSpace(strings.Split(string(outs), ":")[6])
 	currentHome := strings.TrimSpace(strings.Split(string(outs), ":")[5])
 	currentComment := strings.TrimSpace(strings.Split(string(outs), ":")[4])
-	existingGroups := getUserGroups(attrs.Username)
+	existingGroups := getUserGroups(u.Username)
 
-	if attrs.Shell != currentShell {
-		updateShell(attrs.Username, attrs.Shell)
+	if u.Shell != currentShell {
+		updateShell(u.Username, u.Shell)
 	}
-	if attrs.Password != currentPassword {
-		updatePassword(attrs.Username, attrs.Password)
+	if u.Password != currentPassword {
+		updatePassword(u.Username, u.Password)
 	}
-	if attrs.Home != currentHome {
-		updateHome(attrs.Username, attrs.Home)
+	if u.Home != currentHome {
+		updateHome(u.Username, u.Home)
 	}
-	if attrs.Comment != currentComment {
-		updateComment(attrs.Username, attrs.Comment)
+	if u.Comment != currentComment {
+		updateComment(u.Username, u.Comment)
 	}
-	if strings.Join(existingGroups, ",") != strings.Join(attrs.Groups, ",") {
-		updateGroups(attrs.Username, attrs.Groups)
+	if strings.Join(existingGroups, ",") != strings.Join(u.Groups, ",") {
+		updateGroups(u.Username, u.Groups)
 	}
 
-	keyFile := path.Join(attrs.Home, ".ssh", "authorized_keys")
+	keyFile := path.Join(u.Home, ".ssh", "authorized_keys")
 	fileData := []string{}
 	if buf, err := ioutil.ReadFile(keyFile); err == nil {
 		fileData = strings.Split(string(buf), "\n")
 		sort.Strings(fileData)
 	}
-	if strings.Join(attrs.SSHKeys, ",") != strings.Join(fileData, ",") {
-		updateSSHPublicKeys(attrs.Username, attrs)
+	if strings.Join(u.SSHKeys, ",") != strings.Join(fileData, ",") {
+		updateSSHPublicKeys(u.Username, u)
 	}
 	return true
 }
@@ -315,9 +315,9 @@ func updateGroups(username string, groups []string) bool {
 }
 
 // update the user's ~/.ssh/authorized_keys file with their public keys
-func updateSSHPublicKeys(username string, attrs User) bool {
-	keyFile := path.Join(attrs.Home, ".ssh", "authorized_keys")
-	keyData := strings.Join(attrs.SSHKeys, "\n")
+func updateSSHPublicKeys(username string, u User) bool {
+	keyFile := path.Join(u.Home, ".ssh", "authorized_keys")
+	keyData := strings.Join(u.SSHKeys, "\n")
 	tail := 0
 	if len(keyData) > 50 {
 		tail = len(keyData) - 50
@@ -326,12 +326,12 @@ func updateSSHPublicKeys(username string, attrs User) bool {
 	info(keyData)
 	var buffer bytes.Buffer
 	buffer.WriteString(keyData)
-	os.Mkdir(path.Join(attrs.Home, ".ssh"), 0700)
+	os.Mkdir(path.Join(u.Home, ".ssh"), 0700)
 	if err := ioutil.WriteFile(keyFile, buffer.Bytes(), 0600); err != nil {
 		log.Printf("Error: Can't write %s file for user %s: %s", keyFile, username, err)
 	}
 	// os.Chown isn't working, not sure why, use native chown instead
-	exec.Command("chown", "-R", username+":"+username, path.Join(attrs.Home, ".ssh")).Run()
+	exec.Command("chown", "-R", username+":"+username, path.Join(u.Home, ".ssh")).Run()
 	return true
 }
 
