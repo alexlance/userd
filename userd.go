@@ -12,6 +12,7 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -136,14 +137,15 @@ func gatherUsers(files *object.FileIter) (users []User) {
 }
 
 // check the groups that are available on this system
-func removeInvalidGroups(u User, realm string) (goodGroups []string) {
+func removeInvalidGroups(u *User, realm string) {
 	// the groups field can contain realm-specific group membership rules, eg:
 	//
 	// "groups" : [
 	//   "audio",               # user belongs in the audio group for all of their realms
-	//   "visual:realm1",       # user belongs in the video group, but only in realm1
+	//   "video:realm1",        # user belongs in the video group, but only in realm1
 	//   "spidey:realm1:realm2" # user belongs in the spidey group, but only in realm1 and realm2
 	//  ]
+	goodGroups := []string{}
 	for _, g := range u.Groups {
 
 		// if group:realm format
@@ -167,7 +169,7 @@ func removeInvalidGroups(u User, realm string) (goodGroups []string) {
 		goodGroups = append(goodGroups, g)
 	}
 	sort.Strings(goodGroups)
-	return
+	u.Groups = goodGroups
 }
 
 // check if a user account exists on this system
@@ -202,30 +204,31 @@ func deleteUser(username string) bool {
 
 // update the details of an existing user account
 func updateUser(u User) bool {
-	outp, _ := exec.Command("getent", "shadow", u.Username).CombinedOutput()
-
-	var currentPassword string
-	if strings.Contains(string(outp), ":") {
-		currentPassword = strings.TrimSpace(strings.Split(string(outp), ":")[1])
+	output_pass, _ := exec.Command("getent", "shadow", u.Username).CombinedOutput()
+	if pass := strings.Split(string(output_pass), ":"); len(pass) > 1 {
+		if u.Password != strings.TrimSpace(pass[1]) {
+			updatePassword(u.Username, u.Password)
+		}
+	} else {
+		log.Printf("Error: Can't get password hash for user: %s", u.Username)
 	}
-	outs, _ := exec.Command("getent", "passwd", u.Username).CombinedOutput()
-	currentShell := strings.TrimSpace(strings.Split(string(outs), ":")[6])
-	currentHome := strings.TrimSpace(strings.Split(string(outs), ":")[5])
-	currentComment := strings.TrimSpace(strings.Split(string(outs), ":")[4])
+
+	output_details, _ := exec.Command("getent", "passwd", u.Username).CombinedOutput()
+	if details := strings.Split(string(output_details), ":"); len(details) > 6 {
+		if u.Shell != strings.TrimSpace(details[6]) {
+			updateShell(u.Username, u.Shell)
+		}
+		if u.Home != strings.TrimSpace(details[5]) {
+			updateHome(u.Username, u.Home)
+		}
+		if to_alphnum(u.Comment) != strings.TrimSpace(details[4]) {
+			updateComment(u.Username, to_alphnum(u.Comment))
+		}
+	} else {
+		log.Printf("Error: Can't get user details for user: %s", u.Username)
+	}
+
 	existingGroups := getUserGroups(u.Username)
-
-	if u.Shell != currentShell {
-		updateShell(u.Username, u.Shell)
-	}
-	if u.Password != currentPassword {
-		updatePassword(u.Username, u.Password)
-	}
-	if u.Home != currentHome {
-		updateHome(u.Username, u.Home)
-	}
-	if u.Comment != currentComment {
-		updateComment(u.Username, u.Comment)
-	}
 	if strings.Join(existingGroups, ",") != strings.Join(u.Groups, ",") {
 		updateGroups(u.Username, u.Groups)
 	}
@@ -287,6 +290,15 @@ func updateComment(username string, comment string) bool {
 	return true
 }
 
+// strip out characters that are problematic with passwd files
+func to_alphnum(input string) string {
+	reg, err := regexp.Compile("[^a-zA-Z0-9 ]+")
+	if err != nil {
+		log.Fatal(err)
+	}
+	return reg.ReplaceAllString(input, "")
+}
+
 // get the list of groups a user belongs to
 func getUserGroups(username string) (groups []string) {
 	u, _ := user.Lookup(username)
@@ -303,13 +315,11 @@ func getUserGroups(username string) (groups []string) {
 
 // change a users list of groups they belong to
 func updateGroups(username string, groups []string) bool {
-	if len(groups) > 0 {
-		log.Printf("Updating user groups for %s: %s", username, groups)
-		args := distro.changeGroups(username, strings.Join(groups, ","))
-		if out, err := exec.Command(args[0], args[1:]...).CombinedOutput(); err != nil {
-			log.Printf("Error: Can't update user's groups for %s: %s %s", username, err, out)
-			return false
-		}
+	log.Printf("Updating user groups for %s: %s", username, groups)
+	args := distro.changeGroups(username, strings.Join(groups, ","))
+	if out, err := exec.Command(args[0], args[1:]...).CombinedOutput(); err != nil {
+		log.Printf("Error: Can't update user's groups for %s: %s %s", username, err, out)
+		return false
 	}
 	return true
 }
@@ -353,7 +363,7 @@ func main() {
 	for _, u := range users {
 		if inRangePattern(realm, u.Realms) {
 			if userExists(u.Username) || createUser(u) {
-				u.Groups = removeInvalidGroups(u, realm)
+				removeInvalidGroups(&u, realm)
 				updateUser(u)
 			}
 		} else if userExists(u.Username) {
