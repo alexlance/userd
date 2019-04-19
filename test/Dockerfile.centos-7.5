@@ -1,0 +1,3 @@
+FROM centos:7.5.1804
+
+RUN yum update -y && yum install epel-release -y && yum install -y ca-certificates git jq

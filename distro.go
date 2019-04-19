@@ -50,7 +50,7 @@ func getOS() string {
 // return an operating-system specific user management command to run
 func getOSCommands(flavour string) distroCommands {
 	switch strings.ToLower(flavour) {
-	case "centos:7":
+	case "centos:7", "centos:7.4", "centos:7.5", "centos:7.6":
 		return distroCommands{
 			addUser: func(username string, home string) []string {
 				return []string{"adduser", "-m", "--home-dir", home, username}

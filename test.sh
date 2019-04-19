@@ -17,7 +17,9 @@ function run_test() {
 }
 
 function remove_users() {
-  echo "Removing users ######################################"
+  set +x
+  echo "Removing users..."
+  set -x
   local c="/tmp/userd/userd --repo ./ --realm deleteall"
   $c
   test 0 == $(ls -1 /home/ | wc -l)
