@@ -74,7 +74,7 @@ func getOSCommands(flavour string) distroCommands {
 				return []string{"usermod", "--comment", comment, username}
 			},
 		}
-	case "debian", "debian:8", "debian:9", "ubuntu:16.04", "ubuntu:18.04", "ubuntu:18.10", "ubuntu:19.04":
+	case "debian", "debian:8", "debian:9", "debian:10", "ubuntu:16.04", "ubuntu:18.04", "ubuntu:18.10", "ubuntu:19.04":
 		return distroCommands{
 			addUser: func(username string, home string) []string {
 				return []string{"adduser", "--home", home, "--disabled-password", username}
