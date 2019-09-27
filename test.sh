@@ -10,10 +10,15 @@ function run_test() {
   echo "######################################################################### ${name}"
   set -x
   if ${c} 2>&1 | tee /dev/stderr | grep Error; then
-    echo "Error detected"
-    exit 1
+    if [ "${3:-}" ]; then
+      echo "Error detected (continuing though)"
+    else
+      echo "Error detected"
+      exit 1
+    fi
+  else
+    test "$($c 2>&1 | tee /dev/stderr | wc -l)" -eq 1
   fi
-  test "$($c 2>&1 | tee /dev/stderr | wc -l)" -eq 1
 }
 
 function remove_users() {
@@ -168,10 +173,21 @@ run_test "21" "/tmp/userd/userd --repo ./ --realm devil"
 check_users "alla"
 test "$(groups alla)" == "alla : alla"
 
+
 change_value test.json '{ comment : "how do you:like them apples"}'
 run_test "22" "/tmp/userd/userd --repo ./ --realm devil"
 check_users "alla"
 getent passwd alla
+
+
+# test that setting a bad shell, fails with a particular error
+# this also validates that error printing is in the expected format
+change_value test.json '{ shell : "/bin/bad:shell"}'
+output=$(run_test "23" "/tmp/userd/userd --repo ./ --realm devil" "mustfail" 2>&1)
+grep "Updating shell for alla to /bin/bad:shell" <<< $output
+grep "Error: Can't update shell for alla: exit status 3 usermod: invalid field '/bin/bad:shell'" <<< $output
+check_users "alla"
+grep alla /etc/passwd | grep -v "/bin/bad:shell"
 
 
 echo "DONE"
