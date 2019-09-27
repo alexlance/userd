@@ -4,18 +4,19 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os/exec"
 	"strings"
 )
 
 // distroCommands for different flavours of Linux
 type distroCommands struct {
-	addUser        func(string, string) []string
-	delUser        func(string) []string
-	changeShell    func(string, string) []string
-	changePassword func(string, string) []string
-	changeHomeDir  func(string, string) []string
-	changeGroups   func(string, string) []string
-	changeComment  func(string, string) []string
+	addUser        func(string, string) ([]byte, error)
+	delUser        func(string) ([]byte, error)
+	changeShell    func(string, string) ([]byte, error)
+	changePassword func(string, string) ([]byte, error)
+	changeHomeDir  func(string, string) ([]byte, error)
+	changeGroups   func(string, string) ([]byte, error)
+	changeComment  func(string, string) ([]byte, error)
 }
 
 // get the short string version of the operating system eg debian:9
@@ -52,50 +53,64 @@ func getOSCommands(flavour string) distroCommands {
 	switch strings.ToLower(flavour) {
 	case "centos:7", "centos:7.4", "centos:7.5", "centos:7.6":
 		return distroCommands{
-			addUser: func(username string, home string) []string {
-				return []string{"adduser", "-m", "--home-dir", home, username}
+			addUser: func(username string, home string) ([]byte, error) {
+				args := []string{"adduser", "-m", "--home-dir", home, username}
+				return exec.Command(args[0], args[1:]...).CombinedOutput()
 			},
-			delUser: func(username string) []string {
-				return []string{"userdel", "--remove", "-f", username}
+			delUser: func(username string) ([]byte, error) {
+				args := []string{"userdel", "--remove", "-f", username}
+				return exec.Command(args[0], args[1:]...).CombinedOutput()
 			},
-			changeShell: func(username string, shell string) []string {
-				return []string{"usermod", "--shell", shell, username}
+			changeShell: func(username string, shell string) ([]byte, error) {
+				args := []string{"usermod", "--shell", shell, username}
+				return exec.Command(args[0], args[1:]...).CombinedOutput()
 			},
-			changePassword: func(username string, password string) []string {
-				return []string{"usermod", "--password", password, username}
+			changePassword: func(username string, password string) ([]byte, error) {
+				args := []string{"usermod", "--password", password, username}
+				return exec.Command(args[0], args[1:]...).CombinedOutput()
 			},
-			changeHomeDir: func(username string, home string) []string {
-				return []string{"usermod", "--move-home", "--home", home, username}
+			changeHomeDir: func(username string, home string) ([]byte, error) {
+				args := []string{"usermod", "--move-home", "--home", home, username}
+				return exec.Command(args[0], args[1:]...).CombinedOutput()
 			},
-			changeGroups: func(username string, groups string) []string {
-				return []string{"usermod", "--groups", groups, username}
+			changeGroups: func(username string, groups string) ([]byte, error) {
+				args := []string{"usermod", "--groups", groups, username}
+				return exec.Command(args[0], args[1:]...).CombinedOutput()
 			},
-			changeComment: func(username string, comment string) []string {
-				return []string{"usermod", "--comment", comment, username}
+			changeComment: func(username string, comment string) ([]byte, error) {
+				args := []string{"usermod", "--comment", comment, username}
+				return exec.Command(args[0], args[1:]...).CombinedOutput()
 			},
 		}
 	case "debian", "debian:8", "debian:9", "debian:10", "ubuntu:16.04", "ubuntu:18.04", "ubuntu:18.10", "ubuntu:19.04":
 		return distroCommands{
-			addUser: func(username string, home string) []string {
-				return []string{"adduser", "--home", home, "--disabled-password", username}
+			addUser: func(username string, home string) ([]byte, error) {
+				args := []string{"adduser", "--home", home, "--disabled-password", username}
+				return exec.Command(args[0], args[1:]...).CombinedOutput()
 			},
-			delUser: func(username string) []string {
-				return []string{"deluser", "--remove-home", username}
+			delUser: func(username string) ([]byte, error) {
+				args := []string{"deluser", "--remove-home", username}
+				return exec.Command(args[0], args[1:]...).CombinedOutput()
 			},
-			changeShell: func(username string, shell string) []string {
-				return []string{"usermod", "--shell", shell, username}
+			changeShell: func(username string, shell string) ([]byte, error) {
+				args := []string{"usermod", "--shell", shell, username}
+				return exec.Command(args[0], args[1:]...).CombinedOutput()
 			},
-			changePassword: func(username string, password string) []string {
-				return []string{"usermod", "--password", password, username}
+			changePassword: func(username string, password string) ([]byte, error) {
+				args := []string{"usermod", "--password", password, username}
+				return exec.Command(args[0], args[1:]...).CombinedOutput()
 			},
-			changeHomeDir: func(username string, home string) []string {
-				return []string{"usermod", "--move-home", "--home", home, username}
+			changeHomeDir: func(username string, home string) ([]byte, error) {
+				args := []string{"usermod", "--move-home", "--home", home, username}
+				return exec.Command(args[0], args[1:]...).CombinedOutput()
 			},
-			changeGroups: func(username string, groups string) []string {
-				return []string{"usermod", "--groups", groups, username}
+			changeGroups: func(username string, groups string) ([]byte, error) {
+				args := []string{"usermod", "--groups", groups, username}
+				return exec.Command(args[0], args[1:]...).CombinedOutput()
 			},
-			changeComment: func(username string, comment string) []string {
-				return []string{"usermod", "--comment", comment, username}
+			changeComment: func(username string, comment string) ([]byte, error) {
+				args := []string{"usermod", "--comment", comment, username}
+				return exec.Command(args[0], args[1:]...).CombinedOutput()
 			},
 		}
 	default:

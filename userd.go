@@ -183,8 +183,7 @@ func userExists(username string) bool {
 // create a new user account
 func createUser(u User) bool {
 	log.Printf("Creating user: %s", u.Username)
-	args := distro.addUser(u.Username, u.Home)
-	if out, err := exec.Command(args[0], args[1:]...).CombinedOutput(); err != nil {
+	if out, err := distro.addUser(u.Username, u.Home); err != nil {
 		log.Printf("Error: Can't create user: %s: %s %s", u.Username, err, out)
 		return false
 	}
@@ -194,8 +193,7 @@ func createUser(u User) bool {
 // delete a user account
 func deleteUser(username string) bool {
 	log.Printf("Deleting user: %s", username)
-	args := distro.delUser(username)
-	if out, err := exec.Command(args[0], args[1:]...).CombinedOutput(); err != nil {
+	if out, err := distro.delUser(username); err != nil {
 		log.Printf("Error: Can't delete user: %s: %s %s", username, err, out)
 		return false
 	}
@@ -248,8 +246,7 @@ func updateUser(u User) bool {
 // change user's default shell
 func updateShell(username string, shell string) bool {
 	log.Printf("Updating shell for %s to %s", username, shell)
-	args := distro.changeShell(username, shell)
-	if out, err := exec.Command(args[0], args[1:]...).CombinedOutput(); err != nil {
+	if out, err := distro.changeShell(username, shell); err != nil {
 		log.Printf("Error: Can't update shell for %s: %s %s", username, err, out)
 		return false
 	}
@@ -260,8 +257,7 @@ func updateShell(username string, shell string) bool {
 func updatePassword(username string, password string) bool {
 	log.Printf("Updating password for %s", username)
 	info(fmt.Sprintf("New password: %s", password))
-	args := distro.changePassword(username, password)
-	if out, err := exec.Command(args[0], args[1:]...).CombinedOutput(); err != nil {
+	if out, err := distro.changePassword(username, password); err != nil {
 		log.Printf("Error: Can't update password for %s: %s %s", username, err, out)
 		return false
 	}
@@ -271,8 +267,7 @@ func updatePassword(username string, password string) bool {
 // change users home directory
 func updateHome(username string, home string) bool {
 	log.Printf("Updating home dir for %s to %s", username, home)
-	args := distro.changeHomeDir(username, home)
-	if out, err := exec.Command(args[0], args[1:]...).CombinedOutput(); err != nil {
+	if out, err := distro.changeHomeDir(username, home); err != nil {
 		log.Printf("Error: Can't update home dir for %s: %s %s", username, err, out)
 		return false
 	}
@@ -282,8 +277,7 @@ func updateHome(username string, home string) bool {
 // change users gecos comment
 func updateComment(username string, comment string) bool {
 	log.Printf("Updating comment for %s to %s", username, comment)
-	args := distro.changeComment(username, comment)
-	if out, err := exec.Command(args[0], args[1:]...).CombinedOutput(); err != nil {
+	if out, err := distro.changeComment(username, comment); err != nil {
 		log.Printf("Error: Can't update comment for %s: %s %s", username, err, out)
 		return false
 	}
@@ -316,8 +310,7 @@ func getUserGroups(username string) (groups []string) {
 // change a users list of groups they belong to
 func updateGroups(username string, groups []string) bool {
 	log.Printf("Updating user groups for %s: %s", username, groups)
-	args := distro.changeGroups(username, strings.Join(groups, ","))
-	if out, err := exec.Command(args[0], args[1:]...).CombinedOutput(); err != nil {
+	if out, err := distro.changeGroups(username, strings.Join(groups, ",")); err != nil {
 		log.Printf("Error: Can't update user's groups for %s: %s %s", username, err, out)
 		return false
 	}
