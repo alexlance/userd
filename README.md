@@ -8,7 +8,7 @@ Debian/Ubuntu/CentOS user management
     The simple alternative to user account management on Linux.
 
     Userd gathers user account definitions from a git repository, then
-    administrates Linux user accounts and ssh access.
+    administrates the user accounts and ssh access for Linux servers.
 
 
 ### Installation
