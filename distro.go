@@ -93,7 +93,7 @@ func getOSCommands(flavour string) distroCommands {
 				return exec.Command(args[0], args[1:]...).CombinedOutput()
 			},
 		}
-	case "debian", "debian:8", "debian:9", "debian:10", "debian:11", "ubuntu:16.04", "ubuntu:18.04", "ubuntu:18.10", "ubuntu:19.04":
+	case "debian", "debian:8", "debian:9", "debian:10", "debian:11", "debian:12", "ubuntu:16.04", "ubuntu:18.04", "ubuntu:18.10", "ubuntu:19.04":
 		return distroCommands{
 			addUser: func(username string, home string) ([]byte, error) {
 				args := []string{"adduser", "--home", home, "--disabled-password", username}

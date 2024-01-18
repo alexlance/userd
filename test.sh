@@ -185,7 +185,7 @@ getent passwd alla
 change_value test.json '{ shell : "/bin/bad:shell"}'
 output=$(run_test "23" "/tmp/userd/userd --repo ./ --realm devil" "mustfail" 2>&1)
 grep "Updating shell for alla to /bin/bad:shell" <<< $output
-grep "Error: Can't update shell for alla: exit status 3 usermod: invalid field '/bin/bad:shell'" <<< $output
+grep "Error: Can't update shell for alla: exit status 3 usermod: invalid" <<< $output
 check_users "alla"
 grep alla /etc/passwd | grep -v "/bin/bad:shell"
 

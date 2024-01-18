@@ -1,3 +1,7 @@
 FROM debian:buster
 
-RUN apt-get update && apt-get install -y ca-certificates git jq
+RUN apt-get update && apt-get install -y ca-certificates git jq golang procps
+WORKDIR /tmp/userd
+ADD . ./
+RUN go build -ldflags "-s -w"
+RUN go get userd

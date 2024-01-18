@@ -1,3 +1,7 @@
 FROM centos:7.6.1810
 
-RUN yum update -y && yum install epel-release -y && yum install -y ca-certificates git jq
+RUN yum update -y && yum install epel-release -y && yum install -y ca-certificates git jq golang procps
+WORKDIR /tmp/userd
+ADD . ./
+RUN go build -ldflags "-s -w"
+RUN go get userd
