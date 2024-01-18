@@ -11,7 +11,7 @@ currentversion=$(${c} ${gh}/releases | jq -r '.[0].name' | tr -d v)
 version="v$(echo "${currentversion} + 0.01" | bc)"
 grep "userd ${version}" main.go   || (echo "Wrong version in main.go"   && exit 1)
 grep "userd ${version}" README.md || (echo "Wrong version in README.md" && exit 1)
-git tag ${version}
+git tag ${version} || true
 git push origin master
 release=$(${c} -XPOST ${gh}/releases -d '{ "tag_name": "'${version}'", "target_commitish": "master", "name": "'${version}'", "body": "'${version}'", "draft": false, "prerelease": false }')
 url=$(echo "${release}" | jq -r .upload_url | cut -f1 -d'{')
