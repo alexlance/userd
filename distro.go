@@ -58,6 +58,17 @@ func getOSCommands(flavour string) distroCommands {
 				return exec.Command(args[0], args[1:]...).CombinedOutput()
 			},
 			delUser: func(username string) ([]byte, error) {
+				// kill any processes the user account may be running, otherwise
+				// the user account cannot be removed
+				pgrep := []string{"pgrep", "-l", "-u", username}
+				if processlist, _ := exec.Command(pgrep[0], pgrep[1:]...).CombinedOutput(); strings.TrimSpace(string(processlist)) != "" {
+					log.Printf("Found %s processes: %s", username, strings.TrimSpace(strings.Replace(string(processlist), "\n", " ", -1)))
+					pkill := []string{"pkill", "--signal", "9", "-e", "-u", username}
+					out, _ := exec.Command(pkill[0], pkill[1:]...).CombinedOutput()
+					if strings.TrimSpace(string(out)) != "" {
+						log.Printf("Killed %s processes: %s", username, strings.TrimSpace(strings.Replace(string(out), "\n", " ", -1)))
+					}
+				}
 				args := []string{"userdel", "--remove", "-f", username}
 				return exec.Command(args[0], args[1:]...).CombinedOutput()
 			},
@@ -89,6 +100,17 @@ func getOSCommands(flavour string) distroCommands {
 				return exec.Command(args[0], args[1:]...).CombinedOutput()
 			},
 			delUser: func(username string) ([]byte, error) {
+				// kill any processes the user account may be running, otherwise
+				// the user account cannot be removed
+				pgrep := []string{"pgrep", "-l", "-u", username}
+				if processlist, _ := exec.Command(pgrep[0], pgrep[1:]...).CombinedOutput(); strings.TrimSpace(string(processlist)) != "" {
+					log.Printf("Found %s processes: %s", username, strings.TrimSpace(strings.Replace(string(processlist), "\n", " ", -1)))
+					pkill := []string{"pkill", "--signal", "9", "-e", "-u", username}
+					out, _ := exec.Command(pkill[0], pkill[1:]...).CombinedOutput()
+					if strings.TrimSpace(string(out)) != "" {
+						log.Printf("Killed %s processes: %s", username, strings.TrimSpace(strings.Replace(string(out), "\n", " ", -1)))
+					}
+				}
 				args := []string{"deluser", "--remove-home", username}
 				return exec.Command(args[0], args[1:]...).CombinedOutput()
 			},

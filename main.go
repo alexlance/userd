@@ -43,7 +43,7 @@ var (
 
 // grab the command line arguments and figure out which OS we're on
 func init() {
-	log.SetPrefix("userd v1.20 ")
+	log.SetPrefix("userd v1.21 ")
 	if os.Geteuid() != 0 {
 		log.Fatalf("Error: Bad user id (%d), must run as root", os.Geteuid())
 	}
