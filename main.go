@@ -35,24 +35,32 @@ type User struct {
 
 // vars that are global-ish
 var (
-	debug  bool
-	realm  string
-	repo   string
-	distro distroCommands
+	debug   bool
+	realm   string
+	repo    string
+	distro  distroCommands
+	version string
+	help    bool
 )
 
 // grab the command line arguments and figure out which OS we're on
 func init() {
-	log.SetPrefix("userd v1.21 ")
-	if os.Geteuid() != 0 {
-		log.Fatalf("Error: Bad user id (%d), must run as root", os.Geteuid())
-	}
+	version = "v1.21"
+	log.SetPrefix("userd " + version)
 
 	flag.StringVar(&realm, "realm", "", "the instance's realm eg: dev, stage, prod")
 	flag.StringVar(&repo, "repo", "", "git repo where users are stored")
 	flag.BoolVar(&debug, "debug", false, "print debugging info")
+	flag.BoolVar(&help, "help", false, "print version")
 	flag.Parse()
 
+	if help {
+		log.Println(version)
+		os.Exit(0)
+	}
+	if os.Geteuid() != 0 {
+		log.Fatalf("Error: Bad user id (%d), must run as root", os.Geteuid())
+	}
 	if realm == "" {
 		log.Fatal("Error: Empty argument --realm")
 	}
