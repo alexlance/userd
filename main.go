@@ -46,7 +46,7 @@ var (
 // grab the command line arguments and figure out which OS we're on
 func init() {
 	version = "v1.21"
-	log.SetPrefix("userd " + version)
+	log.SetPrefix("userd " + version + " ")
 
 	flag.StringVar(&realm, "realm", "", "the instance's realm eg: dev, stage, prod")
 	flag.StringVar(&repo, "repo", "", "git repo where users are stored")

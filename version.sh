@@ -9,7 +9,7 @@ gh="https://api.github.com/repos/${user}/${repo}"
 c="curl -sfL -u ${user}:${token}"
 currentversion=$(${c} ${gh}/releases | jq -r '.[0].name' | tr -d v)
 version="v$(echo "${currentversion} + 0.01" | bc)"
-grep "userd ${version}" main.go   || (echo "Wrong version in main.go"   && exit 1)
+grep "version = \"${version}\"" main.go   || (echo "Wrong version in main.go"   && exit 1)
 grep "userd ${version}" README.md || (echo "Wrong version in README.md" && exit 1)
 git tag ${version} || true
 git push origin master
